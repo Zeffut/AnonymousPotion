@@ -68,6 +68,24 @@ L'état d'invisibilité est lu au moment de l'événement via
 (potion, flèche, commande, plugin tiers). Le port d'une armure, qui rend le joueur
 partiellement visible en jeu, ne change rien : l'effet est présent, donc le pseudo est brouillé.
 
+### Le cas du tueur déconnecté
+
+Un joueur invisible peut frapper sa cible puis se déconnecter, la cible mourant quelques
+secondes plus tard de chute, de lave ou de poison. Le message cite toujours l'attaquant, mais
+`Bukkit.getPlayer` retourne `null` : lu naïvement, le joueur serait traité comme visible et
+son pseudo partirait en clair. Le plugin échouerait ouvert précisément là où il doit échouer
+fermé, et frapper puis se déconnecter deviendrait un contournement trivial.
+
+`InvisibilityMemory` retient donc, sur `PlayerQuitEvent`, l'UUID des joueurs qui portaient
+l'effet en partant, avec l'instant de leur déconnexion. Un joueur hors ligne compte comme
+invisible si sa déconnexion remonte à moins de **60 secondes** — au-delà, plus aucun message
+de mort ne peut raisonnablement le citer. Les entrées expirées sont purgées pour que la
+structure ne grossisse pas. L'horloge est passée en paramètre plutôt que lue en interne, ce
+qui rend la classe testable sans attendre réellement.
+
+**Limite assumée :** si l'effet expire pendant le vol d'une flèche, l'archer est nommé en
+clair. L'état est lu au moment de la mort, pas au moment du tir.
+
 ### Suppression des métadonnées du nœud
 
 Le nœud de remplacement doit perdre son `hoverEvent`, son `clickEvent` et son `insertion`.
@@ -92,14 +110,15 @@ standard.
 
 ## Architecture
 
-Package `fr.zeffut.anonymouspotion`. Cinq classes, une responsabilité chacune.
+Package `fr.zeffut.anonymouspotion`. Six classes, une responsabilité chacune.
 
 | Classe | Rôle |
 |---|---|
 | `AnonymousPotionPlugin` | Bootstrap : charge la config, enregistre le listener et la commande |
 | `AnonymousPotionConfig` | Lecture typée et validée du `config.yml` |
-| `DeathMessageListener` | Écoute `PlayerDeathEvent`, détermine qui brouiller, journalise les pseudos réels |
+| `DeathMessageListener` | Écoute `PlayerDeathEvent` et `PlayerQuitEvent`, détermine qui brouiller, journalise les pseudos réels |
 | `NameObfuscator` | Logique pure : `Component` + règle de brouillage → `Component` brouillé |
+| `InvisibilityMemory` | Mémoire courte des joueurs invisibles déconnectés |
 | `ReloadCommand` | `/anonymouspotion reload` |
 
 `NameObfuscator` ne dépend d'aucune API Bukkit — seulement d'Adventure. Il reçoit l'ensemble
@@ -155,12 +174,26 @@ brouillage.
 
 ## Gestion d'erreur — fail-closed
 
-Si le brouillage lève une exception alors qu'un joueur invisible est impliqué, le message de
-mort est **supprimé** (`event.deathMessage(null)`) plutôt que laissé tel quel. Un bug ne doit
-jamais faire fuiter un pseudo, ce qui est la raison d'être du plugin. L'exception est loggée
-avec sa stacktrace.
+Si quoi que ce soit lève pendant le traitement d'une mort — sélection des cibles comprise — le
+message de mort est **supprimé** (`event.deathMessage(null)`) plutôt que laissé tel quel, et
+l'erreur est journalisée en `SEVERE` avec sa stacktrace. Le filet couvre `Throwable`, pas
+seulement `RuntimeException` : une `Error` traverserait sinon le bloc intact et laisserait
+partir le message vanilla.
+
+Le compromis est assumé. En fonctionnement nominal les deux comportements sont identiques : la
+question n'est pas de savoir lequel s'exécute, mais comment on échoue. Laisser passer le
+message vanilla, c'est une fuite silencieuse du pseudo — précisément ce que le plugin existe
+pour empêcher — sans aucune trace. Supprimer le message, c'est un dégât cosmétique doublé
+d'une erreur bruyante que l'administrateur voit dans la minute.
 
 Quand aucun joueur invisible n'est impliqué, l'événement n'est pas modifié.
+
+## Priorité d'événement
+
+Le listener écoute en `EventPriority.HIGHEST`, dernière priorité modifiante avant `MONITOR`,
+pour repasser après les plugins de messages de mort personnalisés. Un plugin tiers qui écrit
+après nous, ou qui remplace l'arbre de composants par du texte plat, peut malgré tout
+contourner le brouillage : c'est documenté dans le README.
 
 ## Tests
 
