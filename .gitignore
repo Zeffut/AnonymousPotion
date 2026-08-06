@@ -3,3 +3,5 @@ build/
 *.jar
 .idea/
 .DS_Store
+.superpowers/
+!gradle/wrapper/gradle-wrapper.jar
