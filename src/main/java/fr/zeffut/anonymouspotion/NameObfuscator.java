@@ -1,6 +1,7 @@
 package fr.zeffut.anonymouspotion;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -44,6 +45,10 @@ public final class NameObfuscator {
             return obfuscatedName(input);
         }
 
+        if (obfuscateWeaponName && isItem(input)) {
+            return obfuscatedItem(input);
+        }
+
         Component current = input;
 
         // Les pseudos d'un message de mort vivent dans les arguments du composant
@@ -84,6 +89,51 @@ public final class NameObfuscator {
         }
 
         return current;
+    }
+
+    /** Tous les UUID d'entités mentionnées dans le message, joueurs comme mobs. */
+    public static Set<UUID> collectEntityIds(Component message) {
+        Set<UUID> ids = new HashSet<>();
+        collectInto(message, ids);
+        return ids;
+    }
+
+    private static void collectInto(Component component, Set<UUID> ids) {
+        UUID entityId = entityIdOf(component);
+        if (entityId != null) {
+            ids.add(entityId);
+        }
+        if (component instanceof TranslatableComponent translatable) {
+            for (TranslationArgument argument : translatable.arguments()) {
+                collectInto(argument.asComponent(), ids);
+            }
+        }
+        for (Component child : component.children()) {
+            collectInto(child, ids);
+        }
+    }
+
+    private static boolean isItem(Component component) {
+        HoverEvent<?> hover = component.hoverEvent();
+        return hover != null && hover.action() == HoverEvent.Action.SHOW_ITEM;
+    }
+
+    /**
+     * Les crochets restent lisibles pour garder l'allure d'un message vanilla ; seul le nom
+     * de l'objet est brouillé. Le survol part avec le reste : il contient les NBT, donc le nom.
+     */
+    private Component obfuscatedItem(Component original) {
+        Style style = original.style().toBuilder()
+                .hoverEvent(null)
+                .clickEvent(null)
+                .insertion(null)
+                .build();
+        return Component.text()
+                .style(style)
+                .append(Component.text("["))
+                .append(Component.text(replacement).decorate(TextDecoration.OBFUSCATED))
+                .append(Component.text("]"))
+                .build();
     }
 
     /** UUID porté par le survol d'un nœud d'entité, ou {@code null} si ce n'en est pas un. */

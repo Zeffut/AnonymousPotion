@@ -45,6 +45,28 @@ class NameObfuscatorTest {
         return PlainTextComponentSerializer.plainText().serialize(component);
     }
 
+    /** Sérialise un nœud d'argument précis, pour contourner le piège décrit ci-dessous. */
+    private static Component argumentOf(Component message, int index) {
+        return ((TranslatableComponent) message).arguments().get(index).asComponent();
+    }
+
+    /** Reproduit le nœud d'un objet nommé, tel qu'affiché dans « ... avec [Excalibur] ». */
+    private static Component namedItem(String itemName) {
+        return Component.text()
+                .append(Component.text("["))
+                .append(Component.text(itemName))
+                .append(Component.text("]"))
+                .hoverEvent(HoverEvent.showItem(Key.key("minecraft:diamond_sword"), 1))
+                .build();
+    }
+
+    private static Component deathMessageWithItem(String itemName) {
+        return Component.translatable("death.attack.player.item",
+                playerName("Zeffut", VICTIM_ID),
+                playerName("Steve", KILLER_ID),
+                namedItem(itemName));
+    }
+
     // Note d'écart par rapport au brief : PlainTextComponentSerializer ne résout jamais les
     // arguments d'un TranslatableComponent (seul le fallback ou la clé de traduction est rendu,
     // cf. ComponentFlattenerImpl#BASIC dans adventure-api). `plain(result)` sur le message
@@ -153,5 +175,58 @@ class NameObfuscatorTest {
         Component result = obfuscator.obfuscate(message, Set.of(absent));
 
         assertEquals("Steve", plain(((TranslatableComponent) result).arguments().get(1).asComponent()));
+    }
+
+    @Test
+    void collecteLesUuidDesEntitesMentionnees() {
+        Set<UUID> ids = NameObfuscator.collectEntityIds(deathMessage());
+
+        assertEquals(Set.of(VICTIM_ID, KILLER_ID), ids);
+    }
+
+    @Test
+    void collecteLesUuidDansLesArgumentsImbriques() {
+        Component message = Component.translatable("death.attack.player",
+                playerName("Zeffut", VICTIM_ID),
+                Component.translatable("chat.square_brackets", playerName("Steve", KILLER_ID)));
+
+        assertEquals(Set.of(VICTIM_ID, KILLER_ID), NameObfuscator.collectEntityIds(message));
+    }
+
+    @Test
+    void collecteUnEnsembleVideQuandAucuneEntite() {
+        assertTrue(NameObfuscator.collectEntityIds(Component.text("Zeffut est tombé de haut")).isEmpty());
+    }
+
+    @Test
+    void brouilleLeNomDArmeQuandLOptionEstActive() {
+        Component result = obfuscator.obfuscate(deathMessageWithItem("Excalibur"), Set.of(KILLER_ID));
+
+        assertEquals("[aaaaaaaa]", plain(argumentOf(result, 2)));
+    }
+
+    @Test
+    void supprimeLeSurvolDuNoeudDArmeBrouille() {
+        Component result = obfuscator.obfuscate(deathMessageWithItem("Excalibur"), Set.of(KILLER_ID));
+        Component item = ((TranslatableComponent) result).arguments().get(2).asComponent();
+
+        assertNull(item.hoverEvent());
+    }
+
+    @Test
+    void laisseLeNomDArmeQuandLOptionEstDesactivee() {
+        NameObfuscator sansArme = new NameObfuscator(8, 'a', false);
+
+        Component result = sansArme.obfuscate(deathMessageWithItem("Excalibur"), Set.of(KILLER_ID));
+
+        assertEquals("[Excalibur]", plain(argumentOf(result, 2)));
+        assertEquals("aaaaaaaa", plain(argumentOf(result, 1)));
+    }
+
+    @Test
+    void neBrouillePasLArmeSansJoueurCible() {
+        Component message = deathMessageWithItem("Excalibur");
+
+        assertSame(message, obfuscator.obfuscate(message, Set.of()));
     }
 }
