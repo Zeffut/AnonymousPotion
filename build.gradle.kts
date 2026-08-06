@@ -29,8 +29,13 @@ tasks.test {
 }
 
 tasks.processResources {
+    // La version est capturée à la configuration, hors du bloc filesMatching : y lire
+    // `project` se ferait à l'exécution de la tâche, ce que Gradle déprécie et refusera en 10.
+    // Déclarée en inputs.property pour qu'un changement de version invalide bien le cache.
+    val pluginVersion = project.version.toString()
+    inputs.property("pluginVersion", pluginVersion)
     filesMatching("plugin.yml") {
-        expand("version" to project.version)
+        expand("version" to pluginVersion)
     }
 }
 
