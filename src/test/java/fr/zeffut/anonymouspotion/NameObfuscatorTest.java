@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
@@ -228,5 +229,53 @@ class NameObfuscatorTest {
         Component message = deathMessageWithItem("Excalibur");
 
         assertSame(message, obfuscator.obfuscate(message, Set.of()));
+    }
+
+    // --- Sélection des cibles ---------------------------------------------------------------
+    // La règle « la victime garde son pseudo en clair, même invisible » est la seule exception
+    // du design. Ces tests échouent si on supprime la ligne qui l'implémente.
+
+    /** Prédicat d'invisibilité de test : seuls les UUID listés sont invisibles. */
+    private static Predicate<UUID> invisibles(UUID... ids) {
+        Set<UUID> set = Set.of(ids);
+        return set::contains;
+    }
+
+    @Test
+    void exclutLaVictimeMemeInvisible() {
+        Set<UUID> targets = NameObfuscator.targets(
+                deathMessage(), VICTIM_ID, invisibles(VICTIM_ID, KILLER_ID));
+
+        assertEquals(Set.of(KILLER_ID), targets);
+    }
+
+    @Test
+    void inclutLeTueurInvisible() {
+        Set<UUID> targets = NameObfuscator.targets(deathMessage(), VICTIM_ID, invisibles(KILLER_ID));
+
+        assertEquals(Set.of(KILLER_ID), targets);
+    }
+
+    @Test
+    void exclutUneEntiteInvisibleQuiNEstPasUnJoueur() {
+        UUID mobId = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        Component message = Component.translatable("death.attack.mob",
+                playerName("Zeffut", VICTIM_ID),
+                Component.text("Zombie")
+                        .hoverEvent(HoverEvent.showEntity(
+                                Key.key("minecraft:zombie"), mobId, Component.text("Zombie"))));
+
+        // Le nœud du mob est bien vu par le parcours : l'exclusion vient donc bien du prédicat,
+        // pas d'un mob passé inaperçu. Un zombie invisible reste un zombie, pas un joueur : le
+        // listener interroge Bukkit sur un joueur connecté, qui répond non pour cet UUID.
+        assertTrue(NameObfuscator.collectEntityIds(message).contains(mobId));
+        assertTrue(NameObfuscator.targets(message, VICTIM_ID, invisibles()).isEmpty());
+    }
+
+    @Test
+    void retourneUnEnsembleVideQuandPersonneNEstInvisible() {
+        Set<UUID> targets = NameObfuscator.targets(deathMessage(), VICTIM_ID, invisibles());
+
+        assertTrue(targets.isEmpty());
     }
 }

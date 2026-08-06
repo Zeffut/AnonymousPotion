@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TranslatableComponent;
@@ -89,6 +90,29 @@ public final class NameObfuscator {
         }
 
         return current;
+    }
+
+    /**
+     * Les entités du message qu'il faut brouiller : celles que {@code isInvisible} retient,
+     * la victime exceptée. La victime garde toujours son pseudo, même invisible — c'est la
+     * seule exception de tout le design.
+     *
+     * <p>Le prédicat est injecté plutôt que codé en dur sur Bukkit : c'est ce qui rend cette
+     * règle vérifiable en JUnit, sans démarrer de serveur. Le listener y passe un prédicat qui
+     * interroge l'effet de potion ; une entité qui n'est pas un joueur connecté (mob, joueur
+     * parti depuis longtemps) fait répondre faux au prédicat et sort donc de l'ensemble.
+     */
+    public static Set<UUID> targets(Component message, UUID victimId, Predicate<UUID> isInvisible) {
+        Set<UUID> targets = new HashSet<>();
+        for (UUID entityId : collectEntityIds(message)) {
+            if (entityId.equals(victimId)) {
+                continue;
+            }
+            if (isInvisible.test(entityId)) {
+                targets.add(entityId);
+            }
+        }
+        return targets;
     }
 
     /** Tous les UUID d'entités mentionnées dans le message, joueurs comme mobs. */
