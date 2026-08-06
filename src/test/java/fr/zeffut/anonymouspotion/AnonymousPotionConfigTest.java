@@ -52,7 +52,9 @@ class AnonymousPotionConfigTest {
 
     @Test
     void refuseUnRemplissageDePlusieursCaracteres() {
-        AnonymousPotionConfig config = load(8, "abc");
+        // « xyz » et non « abc » : « abc » commence par le caractère par défaut, l'assertion
+        // passerait donc aussi avec un charAt(0) qui ne contrôlerait pas la longueur.
+        AnonymousPotionConfig config = load(8, "xyz");
 
         assertEquals(AnonymousPotionConfig.DEFAULT_FILLER, config.fillerCharacter());
         assertEquals(1, warnings.size());
