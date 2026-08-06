@@ -523,6 +523,24 @@ Le nom de la méthode dit « entity » et non « player » parce que le survol `
 existe pour n'importe quelle entité, pas seulement les joueurs. Le tri entre joueurs et mobs
 se fait dans le listener, qui a accès à Bukkit.
 
+**Piège de test constaté en tâche 2.** `PlainTextComponentSerializer` ne résout **pas** les
+arguments d'un `TranslatableComponent` : sérialiser un message de mort entier retourne
+`death.attack.player`, pas le texte rendu. Une assertion du type
+`plain(result).contains("Excalibur")` est donc toujours fausse, qu'il y ait brouillage ou non —
+elle ne peut pas échouer et ne teste rien. Les assertions ci-dessous sérialisent le nœud
+d'argument visé, pas l'arbre entier.
+
+Elles s'appuient sur un helper `argumentOf(Component message, int index)`. La tâche 2 en a
+introduit un équivalent pour la même raison : **réutilise celui déjà présent dans le fichier
+de test s'il existe**, sous quelque nom qu'il porte, plutôt que d'en ajouter un doublon. S'il
+n'existe pas, ajoute-le :
+
+```java
+    private static Component argumentOf(Component message, int index) {
+        return ((TranslatableComponent) message).arguments().get(index).asComponent();
+    }
+```
+
 - [ ] **Step 1: Écrire les tests qui échouent**
 
 Ajouter dans `NameObfuscatorTest`. Aucun nouvel import n'est nécessaire : `Key`, `HoverEvent`,
@@ -571,8 +589,7 @@ Ajouter dans `NameObfuscatorTest`. Aucun nouvel import n'est nécessaire : `Key`
     void brouilleLeNomDArmeQuandLOptionEstActive() {
         Component result = obfuscator.obfuscate(deathMessageWithItem("Excalibur"), Set.of(KILLER_ID));
 
-        assertFalse(plain(result).contains("Excalibur"));
-        assertTrue(plain(result).contains("[aaaaaaaa]"));
+        assertEquals("[aaaaaaaa]", plain(argumentOf(result, 2)));
     }
 
     @Test
@@ -589,8 +606,8 @@ Ajouter dans `NameObfuscatorTest`. Aucun nouvel import n'est nécessaire : `Key`
 
         Component result = sansArme.obfuscate(deathMessageWithItem("Excalibur"), Set.of(KILLER_ID));
 
-        assertTrue(plain(result).contains("Excalibur"));
-        assertFalse(plain(result).contains("Steve"));
+        assertEquals("[Excalibur]", plain(argumentOf(result, 2)));
+        assertEquals("aaaaaaaa", plain(argumentOf(result, 1)));
     }
 
     @Test
@@ -698,8 +715,8 @@ git commit -m "feat: collecte des UUID d'entités et brouillage des armes nommé
 **Interfaces:**
 - Consumes: rien.
 - Produces:
-  - `record AnonymousPotionConfig(int obfuscatedLength, char fillerCharacter, boolean obfuscateWeaponName, boolean logRealDeathMessage)`
-  - `static AnonymousPotionConfig of(int obfuscatedLength, String fillerCharacter, boolean obfuscateWeaponName, boolean logRealDeathMessage, Consumer<String> warnings)`
+  - `record AnonymousPotionConfig(int obfuscatedLength, char fillerCharacter, boolean obfuscateWeaponName, boolean logRealNames)`
+  - `static AnonymousPotionConfig of(int obfuscatedLength, String fillerCharacter, boolean obfuscateWeaponName, boolean logRealNames, Consumer<String> warnings)`
     — valide les entrées, retombe sur les défauts en signalant chaque correction via `warnings`.
   - Constantes `DEFAULT_LENGTH = 8`, `DEFAULT_FILLER = 'a'`, `MIN_LENGTH = 1`, `MAX_LENGTH = 32`.
 
@@ -735,7 +752,7 @@ class AnonymousPotionConfigTest {
         assertEquals(12, config.obfuscatedLength());
         assertEquals('x', config.fillerCharacter());
         assertFalse(config.obfuscateWeaponName());
-        assertFalse(config.logRealDeathMessage());
+        assertFalse(config.logRealNames());
         assertTrue(warnings.isEmpty());
     }
 
@@ -818,7 +835,7 @@ public record AnonymousPotionConfig(
         int obfuscatedLength,
         char fillerCharacter,
         boolean obfuscateWeaponName,
-        boolean logRealDeathMessage) {
+        boolean logRealNames) {
 
     public static final int DEFAULT_LENGTH = 8;
     public static final char DEFAULT_FILLER = 'a';
@@ -833,7 +850,7 @@ public record AnonymousPotionConfig(
             int obfuscatedLength,
             String fillerCharacter,
             boolean obfuscateWeaponName,
-            boolean logRealDeathMessage,
+            boolean logRealNames,
             Consumer<String> warnings) {
 
         int length = obfuscatedLength;
@@ -851,7 +868,7 @@ public record AnonymousPotionConfig(
             filler = fillerCharacter.charAt(0);
         }
 
-        return new AnonymousPotionConfig(length, filler, obfuscateWeaponName, logRealDeathMessage);
+        return new AnonymousPotionConfig(length, filler, obfuscateWeaponName, logRealNames);
     }
 }
 ```
@@ -874,8 +891,8 @@ filler-character: 'a'
 # Ne s'applique qu'aux messages où un joueur invisible est déjà brouillé.
 obfuscate-weapon-name: true
 
-# Écrire le vrai message de mort dans les logs serveur, pour la modération.
-log-real-death-message: true
+# Écrire dans les logs serveur le pseudo réel des joueurs brouillés, pour la modération.
+log-real-names: true
 ```
 
 - [ ] **Step 5: Lancer toute la suite de tests**
@@ -905,7 +922,7 @@ git commit -m "feat: configuration validée du plugin"
 - Consumes:
   - `NameObfuscator(int, char, boolean)`, `obfuscate(Component, Set<UUID>)`, `collectEntityIds(Component)`
   - `AnonymousPotionConfig.of(int, String, boolean, boolean, Consumer<String>)` et ses accesseurs
-    `obfuscatedLength()`, `fillerCharacter()`, `obfuscateWeaponName()`, `logRealDeathMessage()`
+    `obfuscatedLength()`, `fillerCharacter()`, `obfuscateWeaponName()`, `logRealNames()`
 - Produces:
   - `DeathMessageListener(AnonymousPotionPlugin plugin)` — se relit la config du plugin à chaque mort.
   - `AnonymousPotionPlugin#config()` retournant l'`AnonymousPotionConfig` courant.
@@ -921,6 +938,14 @@ Le listener lit la config via `plugin.config()` à chaque événement plutôt qu
 dans un champ : c'est ce qui fait que `/anonymouspotion reload` prend effet immédiatement,
 sans réenregistrer le listener.
 
+**Ce que journalise `log-real-names`.** Le plugin logue la victime et le ou les
+pseudos réels qui viennent d'être brouillés, pas le message de mort rendu. Sérialiser le
+message n'aurait donné que la clé de traduction : `PlainTextComponentSerializer` ne résout pas
+les arguments d'un `TranslatableComponent`, et le rendu réel se fait côté client. Le serveur
+journalise déjà de son côté le message tel qu'affiché, avec la victime lisible ; la ligne du
+plugin apporte exactement ce qui manque au modérateur, à savoir l'identité derrière le
+brouillage.
+
 - [ ] **Step 1: Écrire `DeathMessageListener.java`**
 
 Pas de test unitaire ici : la classe n'est qu'un branchement entre Bukkit et les deux classes
@@ -933,9 +958,9 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -973,9 +998,9 @@ public final class DeathMessageListener implements Listener {
 
             Component obfuscated = obfuscator.obfuscate(message, targets);
 
-            if (config.logRealDeathMessage()) {
-                plugin.getLogger().info("Vrai message de mort : "
-                        + PlainTextComponentSerializer.plainText().serialize(message));
+            if (config.logRealNames()) {
+                plugin.getLogger().info("Mort de " + event.getEntity().getName()
+                        + " — pseudo(s) brouillé(s) : " + realNames(targets));
             }
 
             event.deathMessage(obfuscated);
@@ -986,6 +1011,16 @@ public final class DeathMessageListener implements Listener {
             plugin.getLogger().log(Level.SEVERE,
                     "Échec du brouillage du message de mort, message supprimé par sécurité.", exception);
         }
+    }
+
+    /** Pseudos réels des joueurs brouillés, pour les logs de modération. */
+    private String realNames(Set<UUID> targets) {
+        return targets.stream()
+                .map(id -> {
+                    Player player = Bukkit.getPlayer(id);
+                    return player != null ? player.getName() : id.toString();
+                })
+                .collect(Collectors.joining(", "));
     }
 
     /**
@@ -1043,7 +1078,7 @@ public final class AnonymousPotionPlugin extends JavaPlugin {
                 file.getInt("obfuscated-length", AnonymousPotionConfig.DEFAULT_LENGTH),
                 file.getString("filler-character", String.valueOf(AnonymousPotionConfig.DEFAULT_FILLER)),
                 file.getBoolean("obfuscate-weapon-name", true),
-                file.getBoolean("log-real-death-message", true),
+                file.getBoolean("log-real-names", true),
                 getLogger()::warning);
     }
 }
@@ -1163,7 +1198,7 @@ Déposer `AnonymousPotion.jar` dans le dossier `plugins/`, puis redémarrer le s
 | `obfuscated-length` | `8` | Nombre de caractères du brouillage, entre 1 et 32. Fixe pour tous les joueurs : une longueur variable trahirait le tueur. |
 | `filler-character` | `a` | Caractère de base. Minecraft remplace chaque caractère par un glyphe de même largeur, ce réglage fixe donc la largeur affichée. |
 | `obfuscate-weapon-name` | `true` | Brouille aussi le nom des armes personnalisées, qui peuvent trahir le tueur. |
-| `log-real-death-message` | `true` | Écrit le vrai message de mort dans les logs serveur. |
+| `log-real-names` | `true` | Écrit dans les logs serveur le pseudo réel des joueurs brouillés. |
 
 `/anonymouspotion reload` recharge à chaud (permission `anonymouspotion.admin`, OP par défaut).
 
@@ -1191,7 +1226,7 @@ Le jar est produit dans `build/libs/AnonymousPotion.jar`.
    Passer `obfuscate-weapon-name` à `false`, lancer `/anonymouspotion reload`, retuer :
    le nom de l'arme redevient lisible, le pseudo reste brouillé.
 7. **Logs** — vérifier que la console contient bien la ligne
-   `[AnonymousPotion] Vrai message de mort : …` avec le vrai pseudo.
+   `[AnonymousPotion] Mort de <victime> — pseudo(s) brouillé(s) : <vrai pseudo>`.
 8. **Sans invisibilité** — un kill normal produit un message de mort strictement vanilla.
 ````
 

@@ -38,7 +38,7 @@ joueur, les messages de connexion et déconnexion, les avancements, la tab list,
 au-dessus de la tête.
 
 Aucun joueur ne voit jamais le vrai pseudo, y compris les OP : le gameplay est identique pour
-tous. Les logs serveur conservent le vrai message pour la modération.
+tous. Les logs serveur conservent l'identité réelle pour la modération.
 
 ## Approche technique
 
@@ -98,7 +98,7 @@ Package `fr.zeffut.anonymouspotion`. Cinq classes, une responsabilité chacune.
 |---|---|
 | `AnonymousPotionPlugin` | Bootstrap : charge la config, enregistre le listener et la commande |
 | `AnonymousPotionConfig` | Lecture typée et validée du `config.yml` |
-| `DeathMessageListener` | Écoute `PlayerDeathEvent`, détermine qui brouiller, log le vrai message |
+| `DeathMessageListener` | Écoute `PlayerDeathEvent`, détermine qui brouiller, journalise les pseudos réels |
 | `NameObfuscator` | Logique pure : `Component` + règle de brouillage → `Component` brouillé |
 | `ReloadCommand` | `/anonymouspotion reload` |
 
@@ -125,8 +125,8 @@ filler-character: 'a'
 # Ne s'applique qu'aux messages où un joueur invisible est déjà brouillé.
 obfuscate-weapon-name: true
 
-# Écrire le vrai message de mort dans les logs serveur, pour la modération.
-log-real-death-message: true
+# Écrire dans les logs serveur le pseudo réel des joueurs brouillés, pour la modération.
+log-real-names: true
 ```
 
 **Validation :** `obfuscated-length` est ramené dans l'intervalle 1–32 ;
@@ -139,11 +139,19 @@ défaut. C'est la seule commande et la seule permission du plugin.
 
 ## Journalisation
 
-Quand `log-real-death-message` est actif et qu'un brouillage a eu lieu, le plugin écrit le
-message de mort non brouillé dans les logs. Le serveur journalisant de son côté le message
-tel qu'affiché, la console contient les deux lignes — celle du serveur avec le texte brouillé,
-et celle du plugin avec le vrai pseudo, préfixée `[AnonymousPotion]`. Cette redondance est
-volontaire et assumée : elle évite d'intercepter le mécanisme de log du serveur.
+Quand `log-real-names` est actif et qu'un brouillage a eu lieu, le plugin écrit dans les logs
+la victime et le ou les pseudos réels qui viennent d'être brouillés :
+
+```
+[AnonymousPotion] Mort de Zeffut — pseudo(s) brouillé(s) : Steve
+```
+
+Le plugin ne journalise pas le message de mort rendu, pour deux raisons. Sérialiser le
+composant ne donnerait que la clé de traduction : `PlainTextComponentSerializer` ne résout pas
+les arguments d'un `TranslatableComponent`, et la phrase n'est assemblée que côté client. Et
+c'est inutile : le serveur journalise déjà le message tel qu'affiché, avec la victime lisible.
+La ligne du plugin apporte exactement ce qui manque au modérateur — l'identité derrière le
+brouillage.
 
 ## Gestion d'erreur — fail-closed
 
