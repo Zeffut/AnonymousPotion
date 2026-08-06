@@ -1,0 +1,17 @@
+name: AnonymousPotion
+version: ${version}
+main: fr.zeffut.anonymouspotion.AnonymousPotionPlugin
+api-version: '1.21'
+authors: [Zeffut]
+description: Brouille le pseudo des joueurs invisibles dans les messages de mort
+
+commands:
+  anonymouspotion:
+    description: Commandes d'administration d'AnonymousPotion
+    usage: /anonymouspotion reload
+    permission: anonymouspotion.admin
+
+permissions:
+  anonymouspotion.admin:
+    description: Recharger la configuration d'AnonymousPotion
+    default: op

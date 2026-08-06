@@ -38,7 +38,7 @@ joueur, les messages de connexion et déconnexion, les avancements, la tab list,
 au-dessus de la tête.
 
 Aucun joueur ne voit jamais le vrai pseudo, y compris les OP : le gameplay est identique pour
-tous. Les logs serveur conservent le vrai message pour la modération.
+tous. Les logs serveur conservent l'identité réelle pour la modération.
 
 ## Approche technique
 
@@ -68,6 +68,24 @@ L'état d'invisibilité est lu au moment de l'événement via
 (potion, flèche, commande, plugin tiers). Le port d'une armure, qui rend le joueur
 partiellement visible en jeu, ne change rien : l'effet est présent, donc le pseudo est brouillé.
 
+### Le cas du tueur déconnecté
+
+Un joueur invisible peut frapper sa cible puis se déconnecter, la cible mourant quelques
+secondes plus tard de chute, de lave ou de poison. Le message cite toujours l'attaquant, mais
+`Bukkit.getPlayer` retourne `null` : lu naïvement, le joueur serait traité comme visible et
+son pseudo partirait en clair. Le plugin échouerait ouvert précisément là où il doit échouer
+fermé, et frapper puis se déconnecter deviendrait un contournement trivial.
+
+`InvisibilityMemory` retient donc, sur `PlayerQuitEvent`, l'UUID des joueurs qui portaient
+l'effet en partant, avec l'instant de leur déconnexion. Un joueur hors ligne compte comme
+invisible si sa déconnexion remonte à moins de **60 secondes** — au-delà, plus aucun message
+de mort ne peut raisonnablement le citer. Les entrées expirées sont purgées pour que la
+structure ne grossisse pas. L'horloge est passée en paramètre plutôt que lue en interne, ce
+qui rend la classe testable sans attendre réellement.
+
+**Limite assumée :** si l'effet expire pendant le vol d'une flèche, l'archer est nommé en
+clair. L'état est lu au moment de la mort, pas au moment du tir.
+
 ### Suppression des métadonnées du nœud
 
 Le nœud de remplacement doit perdre son `hoverEvent`, son `clickEvent` et son `insertion`.
@@ -92,14 +110,15 @@ standard.
 
 ## Architecture
 
-Package `fr.zeffut.anonymouspotion`. Cinq classes, une responsabilité chacune.
+Package `fr.zeffut.anonymouspotion`. Six classes, une responsabilité chacune.
 
 | Classe | Rôle |
 |---|---|
 | `AnonymousPotionPlugin` | Bootstrap : charge la config, enregistre le listener et la commande |
 | `AnonymousPotionConfig` | Lecture typée et validée du `config.yml` |
-| `DeathMessageListener` | Écoute `PlayerDeathEvent`, détermine qui brouiller, log le vrai message |
+| `DeathMessageListener` | Écoute `PlayerDeathEvent` et `PlayerQuitEvent`, détermine qui brouiller, journalise les pseudos réels |
 | `NameObfuscator` | Logique pure : `Component` + règle de brouillage → `Component` brouillé |
+| `InvisibilityMemory` | Mémoire courte des joueurs invisibles déconnectés |
 | `ReloadCommand` | `/anonymouspotion reload` |
 
 `NameObfuscator` ne dépend d'aucune API Bukkit — seulement d'Adventure. Il reçoit l'ensemble
@@ -125,8 +144,8 @@ filler-character: 'a'
 # Ne s'applique qu'aux messages où un joueur invisible est déjà brouillé.
 obfuscate-weapon-name: true
 
-# Écrire le vrai message de mort dans les logs serveur, pour la modération.
-log-real-death-message: true
+# Écrire dans les logs serveur le pseudo réel des joueurs brouillés, pour la modération.
+log-real-names: true
 ```
 
 **Validation :** `obfuscated-length` est ramené dans l'intervalle 1–32 ;
@@ -139,20 +158,42 @@ défaut. C'est la seule commande et la seule permission du plugin.
 
 ## Journalisation
 
-Quand `log-real-death-message` est actif et qu'un brouillage a eu lieu, le plugin écrit le
-message de mort non brouillé dans les logs. Le serveur journalisant de son côté le message
-tel qu'affiché, la console contient les deux lignes — celle du serveur avec le texte brouillé,
-et celle du plugin avec le vrai pseudo, préfixée `[AnonymousPotion]`. Cette redondance est
-volontaire et assumée : elle évite d'intercepter le mécanisme de log du serveur.
+Quand `log-real-names` est actif et qu'un brouillage a eu lieu, le plugin écrit dans les logs
+la victime et le ou les pseudos réels qui viennent d'être brouillés :
+
+```
+[AnonymousPotion] Mort de Zeffut — pseudo(s) brouillé(s) : Steve
+```
+
+Le plugin ne journalise pas le message de mort rendu, pour deux raisons. Sérialiser le
+composant ne donnerait que la clé de traduction : `PlainTextComponentSerializer` ne résout pas
+les arguments d'un `TranslatableComponent`, et la phrase n'est assemblée que côté client. Et
+c'est inutile : le serveur journalise déjà le message tel qu'affiché, avec la victime lisible.
+La ligne du plugin apporte exactement ce qui manque au modérateur — l'identité derrière le
+brouillage.
 
 ## Gestion d'erreur — fail-closed
 
-Si le brouillage lève une exception alors qu'un joueur invisible est impliqué, le message de
-mort est **supprimé** (`event.deathMessage(null)`) plutôt que laissé tel quel. Un bug ne doit
-jamais faire fuiter un pseudo, ce qui est la raison d'être du plugin. L'exception est loggée
-avec sa stacktrace.
+Si quoi que ce soit lève pendant le traitement d'une mort — sélection des cibles comprise — le
+message de mort est **supprimé** (`event.deathMessage(null)`) plutôt que laissé tel quel, et
+l'erreur est journalisée en `SEVERE` avec sa stacktrace. Le filet couvre `Throwable`, pas
+seulement `RuntimeException` : une `Error` traverserait sinon le bloc intact et laisserait
+partir le message vanilla.
+
+Le compromis est assumé. En fonctionnement nominal les deux comportements sont identiques : la
+question n'est pas de savoir lequel s'exécute, mais comment on échoue. Laisser passer le
+message vanilla, c'est une fuite silencieuse du pseudo — précisément ce que le plugin existe
+pour empêcher — sans aucune trace. Supprimer le message, c'est un dégât cosmétique doublé
+d'une erreur bruyante que l'administrateur voit dans la minute.
 
 Quand aucun joueur invisible n'est impliqué, l'événement n'est pas modifié.
+
+## Priorité d'événement
+
+Le listener écoute en `EventPriority.HIGHEST`, dernière priorité modifiante avant `MONITOR`,
+pour repasser après les plugins de messages de mort personnalisés. Un plugin tiers qui écrit
+après nous, ou qui remplace l'arbre de composants par du texte plat, peut malgré tout
+contourner le brouillage : c'est documenté dans le README.
 
 ## Tests
 
