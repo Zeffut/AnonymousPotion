@@ -12,11 +12,13 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.potion.PotionEffectType;
 
 public final class DeathMessageListener implements Listener {
 
     private final AnonymousPotionPlugin plugin;
+    private final InvisibilityMemory invisibilityMemory = new InvisibilityMemory();
 
     public DeathMessageListener(AnonymousPotionPlugin plugin) {
         this.plugin = plugin;
@@ -80,11 +82,31 @@ public final class DeathMessageListener implements Listener {
     }
 
     /**
+     * Mémorise les joueurs qui quittent le serveur en étant invisibles. Ce handler vit ici, et
+     * pas dans un listener à part, parce qu'il n'alimente qu'une seule décision : celle prise
+     * plus haut par {@link #isInvisible(UUID)}.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        if (player.hasPotionEffect(PotionEffectType.INVISIBILITY)) {
+            invisibilityMemory.remember(player.getUniqueId(), System.currentTimeMillis());
+        }
+    }
+
+    /**
      * Seul point du plugin qui interroge Bukkit sur l'invisibilité. Une entité qui n'est pas
      * un joueur connecté — un mob, un joueur parti depuis longtemps — n'est pas invisible.
+     *
+     * <p>Le joueur hors ligne passe par la mémoire courte : un invisible qui frappe puis se
+     * déconnecte reste cité dans le message de mort différé de sa cible, et Bukkit ne le
+     * connaît plus. Le traiter comme visible serait un échec ouvert.
      */
     private boolean isInvisible(UUID entityId) {
         Player player = Bukkit.getPlayer(entityId);
-        return player != null && player.hasPotionEffect(PotionEffectType.INVISIBILITY);
+        if (player != null) {
+            return player.hasPotionEffect(PotionEffectType.INVISIBILITY);
+        }
+        return invisibilityMemory.wasRecentlyInvisible(entityId, System.currentTimeMillis());
     }
 }
