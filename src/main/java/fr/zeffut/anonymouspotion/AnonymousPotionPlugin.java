@@ -12,6 +12,8 @@ public final class AnonymousPotionPlugin extends JavaPlugin {
         saveDefaultConfig();
         reloadSettings();
         getServer().getPluginManager().registerEvents(new DeathMessageListener(this), this);
+        java.util.Objects.requireNonNull(getCommand("anonymouspotion"))
+                .setExecutor(new ReloadCommand(this));
         getLogger().info("AnonymousPotion activé.");
     }
 
