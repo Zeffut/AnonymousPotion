@@ -1,0 +1,17 @@
+# AnonymousPotion — brouille le pseudo des joueurs invisibles dans les messages de mort.
+
+# Nombre de caractères du texte brouillé. Identique pour tous les joueurs : une longueur
+# variable trahirait l'identité du tueur sur un serveur peu peuplé. Entre 1 et 32.
+obfuscated-length: 8
+
+# Caractère de base du brouillage. Minecraft remplace chaque caractère par un glyphe
+# aléatoire de MÊME LARGEUR, donc ce choix fixe la largeur affichée à l'écran.
+# 'a' correspond à la largeur d'une lettre standard.
+filler-character: 'a'
+
+# Brouiller aussi le nom des armes personnalisées, qui peuvent trahir le tueur.
+# Ne s'applique qu'aux messages où un joueur invisible est déjà brouillé.
+obfuscate-weapon-name: true
+
+# Écrire dans les logs serveur le pseudo réel des joueurs brouillés, pour la modération.
+log-real-names: true
