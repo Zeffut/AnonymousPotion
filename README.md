@@ -14,7 +14,7 @@ Steve a été tué par Zeffut          ← Zeffut est invisible, mais il est la 
 
 Seuls les messages de mort sont concernés. Le chat, les connexions, les avancements, la tab
 list et le nametag restent vanilla. Aucun joueur ne voit le vrai pseudo, y compris les OP ;
-les logs serveur le conservent pour la modération.
+les logs serveur le conservent pour la modération tant que `log-real-names` est actif.
 
 ## Installation
 
@@ -32,6 +32,27 @@ Déposer `AnonymousPotion.jar` dans le dossier `plugins/`, puis redémarrer le s
 | `log-real-names` | `true` | Écrit dans les logs serveur le pseudo réel des joueurs brouillés. |
 
 `/anonymouspotion reload` recharge à chaud (permission `anonymouspotion.admin`, OP par défaut).
+
+## Limitations connues
+
+**L'invisibilité est lue au moment de la mort.** Si l'effet expire pendant le vol d'une flèche,
+l'archer est nommé en clair : à l'instant du message, il n'est plus invisible. C'est le
+comportement voulu — l'état affiché est celui de la mort, pas celui du tir.
+
+**Un joueur qui se déconnecte invisible reste brouillé une minute.** Passé ce délai, s'il est
+encore cité dans un message de mort, son pseudo réapparaît en clair : la mémoire des joueurs
+partis est volontairement courte.
+
+**`log-real-names: false` supprime toute trace du tueur.** Le log serveur affiche lui aussi le
+pseudo brouillé — l'identité réelle n'existe nulle part ailleurs. Désactiver cette option
+n'allège donc pas la modération : elle la rend impossible.
+
+## Compatibilité
+
+Le plugin réécrit le message de mort en priorité `HIGHEST`, la dernière avant `MONITOR`. Un
+plugin tiers qui remplace le message de mort par du texte plat — sans les nœuds d'entité qui
+portent les UUID — ou qui écrit après nous, contourne le brouillage. En cas de doute, dérouler
+la checklist ci-dessous avec les autres plugins chargés.
 
 ## Compilation
 
@@ -59,3 +80,6 @@ Le jar est produit dans `build/libs/AnonymousPotion.jar`.
 7. **Logs** — vérifier que la console contient bien la ligne
    `[AnonymousPotion] Mort de <victime> — pseudo(s) brouillé(s) : <vrai pseudo>`.
 8. **Sans invisibilité** — un kill normal produit un message de mort strictement vanilla.
+9. **Déconnexion du tueur** — invisible, frapper la victime puis se déconnecter aussitôt ;
+   laisser la victime mourir de sa chute ou du poison dans la minute : le pseudo du tueur
+   déconnecté est brouillé lui aussi.
