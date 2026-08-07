@@ -79,12 +79,31 @@ class TelemetryTest {
         Telemetry t = telemetry();
         t.pluginEnabled("1.21.11-132", 8, true, true, true);
         t.deathObfuscated(1, false, false, "death.attack.player");
+        t.obfuscationFailed(new IllegalStateException("boum"));
         t.commandUsed("reload");
+        t.sessionHeartbeat(30, 7);
 
+        assertEquals(5, envoyes.size());
         for (String body : envoyes) {
             assertTrue(body.contains("\"distinct_id\":\"install-42\""));
             assertFalse(body.contains("username"));
             assertFalse(body.contains("player_ip"));
         }
+    }
+
+    @Test
+    void laisseIntacteUneCleDeTraductionValide() {
+        telemetry().deathObfuscated(1, false, false, "death.attack.lava.player");
+
+        assertTrue(dernier().contains("\"death_key\":\"death.attack.lava.player\""));
+    }
+
+    @Test
+    void remplaceUnMessageDeMortRenduParInvalid() {
+        telemetry().deathObfuscated(1, false, false, "Zeffut a été tué par Steve");
+
+        assertTrue(dernier().contains("\"death_key\":\"invalid\""));
+        assertFalse(dernier().contains("Zeffut"));
+        assertFalse(dernier().contains("Steve"));
     }
 }

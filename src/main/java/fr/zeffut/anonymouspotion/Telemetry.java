@@ -3,6 +3,7 @@ package fr.zeffut.anonymouspotion;
 import fr.zeffut.anonymouspotion.telemetry.PostHogClient;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Mappe les événements métier du plugin vers PostHog. Aucune logique réseau ici.
@@ -12,6 +13,9 @@ import java.util.Map;
  * expédier ces mêmes pseudos à un service tiers.
  */
 public final class Telemetry {
+
+    /** Une clé de traduction vanilla ne contient que minuscules, chiffres, points et tirets bas. */
+    private static final Pattern DEATH_KEY_PATTERN = Pattern.compile("^[a-z0-9._]+$");
 
     private final PostHogClient client;
     private final String serverInstallId;
@@ -33,14 +37,20 @@ public final class Telemetry {
         client.capture("plugin_enabled", serverInstallId, p);
     }
 
-    /** {@code deathKey} est la clé de traduction vanilla, jamais le message rendu. */
+    /**
+     * {@code deathKey} doit être la clé de traduction vanilla, jamais le message rendu. Garde
+     * exécutable : toute valeur qui ne respecte pas le format d'une clé (minuscules, chiffres,
+     * points, tirets bas) est remplacée par {@code "invalid"} avant l'envoi, ce qui empêche un
+     * message rendu — qui contient forcément espaces et majuscules — de fuiter.
+     */
     public void deathObfuscated(int obfuscatedCount, boolean weaponObfuscated,
                                 boolean offlineKiller, String deathKey) {
+        String safeDeathKey = DEATH_KEY_PATTERN.matcher(deathKey).matches() ? deathKey : "invalid";
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("obfuscated_count", obfuscatedCount);
         p.put("weapon_obfuscated", weaponObfuscated);
         p.put("offline_killer", offlineKiller);
-        p.put("death_key", deathKey);
+        p.put("death_key", safeDeathKey);
         client.capture("death_obfuscated", serverInstallId, p);
     }
 
