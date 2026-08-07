@@ -35,10 +35,10 @@ CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: $MODRINTH_TOKEN
 BODY=$(python3 -c 'import json,sys; print(json.dumps(open("docs/modrinth-description.md").read()))')
 
 # ---------- 1. Le projet, s'il n'existe pas déjà ----------
-if curl -sf -o /dev/null "$API/project/$SLUG"; then
+if curl -sf -o /dev/null -H "Authorization: $MODRINTH_TOKEN" "$API/project/$SLUG"; then
     echo "Projet $SLUG déjà présent, on passe à la version."
 else
-    echo "Création du projet $SLUG…"
+    echo "Création du projet ${SLUG}…"
     cat > /tmp/ap-project.json <<JSON
 {
   "slug": "$SLUG",
@@ -64,18 +64,22 @@ JSON
 fi
 
 # ---------- 2. La version ----------
-echo "Publication de la version $VERSION…"
+# project_id attend l'ID base62 du projet, pas son slug : un slug provoque
+# « Base62 decoding overflowed ».
+PROJECT_ID=$(curl -sS -H "Authorization: $MODRINTH_TOKEN" "$API/project/$SLUG" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+echo "Publication de la version ${VERSION} sur ${PROJECT_ID}…"
 cat > /tmp/ap-version.json <<JSON
 {
   "name": "AnonymousPotion $VERSION",
   "version_number": "$VERSION",
-  "changelog": "Première version.\n\nBrouille le pseudo des joueurs invisibles dans les messages de mort, sauf quand le joueur invisible est lui-même la victime.",
+  "changelog": "First release.\n\nPlayers under Invisibility have their username replaced with obfuscated text in death messages — unless they are the victim, in which case their name is shown in plain text.\n\n- Every kind of death: melee, bow, trident, indirect deaths\n- Hover and click stripped from the obfuscated name: no leak of the real username or UUID\n- Custom weapon names obfuscated too, switchable off\n- A killer who disconnects stays anonymous for 60 seconds\n- Fail-closed: on error the message is dropped rather than sent through\n\nRequires Paper 1.21.11 and Java 21. No dependencies.",
   "dependencies": [],
   "game_versions": $GAME_VERSIONS,
   "version_type": "release",
   "loaders": ["paper", "purpur", "folia"],
   "featured": true,
-  "project_id": "$SLUG",
+  "project_id": "$PROJECT_ID",
   "file_parts": ["file"],
   "primary_file": "file"
 }
