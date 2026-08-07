@@ -6,10 +6,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import fr.zeffut.anonymouspotion.telemetry.PostHogClient;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class TelemetryTest {
+
+    /**
+     * Propriétés jointes par le client à 100 % du trafic. Répétées ici plutôt que partagées avec
+     * {@code PostHogClientTest} : deux énoncés indépendants de la même divulgation valent mieux
+     * qu'un seul, dont on pourrait relâcher la valeur sans s'en apercevoir.
+     */
+    private static final Set<String> PROPRIETES_COMMUNES =
+            Set.of("app", "source", "mc_version", "component_version", "$ip");
+
+    /** Les clés de l'enveloppe de la Capture API. */
+    private static final Set<String> CLES_ENVELOPPE =
+            Set.of("api_key", "event", "distinct_id", "timestamp", "properties");
+
+    /** L'ensemble exact attendu : les propriétés communes plus celles, métier, énumérées ici. */
+    private static Set<String> avec(String... metier) {
+        Set<String> attendues = new HashSet<>(PROPRIETES_COMMUNES);
+        attendues.addAll(List.of(metier));
+        return attendues;
+    }
 
     /**
      * Les 103 clés {@code death.*} réelles extraites de
@@ -75,20 +96,54 @@ class TelemetryTest {
 
     @Test
     void emetLeDemarrageAvecLaConfiguration() {
-        telemetry().pluginEnabled("1.21.11-132", 8, true, true, true);
+        telemetry().pluginEnabled("1.21.11-132", 8, true, false, true);
 
         assertTrue(dernier().contains("\"event\":\"plugin_enabled\""));
+        assertTrue(dernier().contains("\"server_version\":\"1.21.11-132\""));
         assertTrue(dernier().contains("\"obfuscated_length\":8"));
         assertTrue(dernier().contains("\"obfuscate_weapon_name\":true"));
+        assertTrue(dernier().contains("\"log_real_names\":false"));
+        assertTrue(dernier().contains("\"online_mode\":true"));
     }
 
+    @Test
+    void nEmetQueLesProprietesDeclareesAuDemarrage() {
+        telemetry().pluginEnabled("1.21.11-132", 8, true, true, true);
+
+        assertEquals(avec("server_version", "obfuscated_length", "obfuscate_weapon_name",
+                "log_real_names", "online_mode"), JsonProbe.propertyKeys(dernier()));
+    }
+
+    /**
+     * Les deux booléens sont volontairement distincts : passer {@code true, true} laisserait
+     * l'assertion verte même si l'implémentation les intervertissait.
+     */
     @Test
     void emetUneMortBrouillee() {
         telemetry().deathObfuscated(2, true, false, "death.attack.player");
 
         assertTrue(dernier().contains("\"event\":\"death_obfuscated\""));
         assertTrue(dernier().contains("\"obfuscated_count\":2"));
+        assertTrue(dernier().contains("\"weapon_obfuscated\":true"));
+        assertTrue(dernier().contains("\"offline_killer\":false"));
         assertTrue(dernier().contains("\"death_key\":\"death.attack.player\""));
+    }
+
+    /** La même vérification dans l'autre sens : une inversion échoue des deux côtés. */
+    @Test
+    void emetUneMortBrouilleeSansArmeParUnTueurHorsLigne() {
+        telemetry().deathObfuscated(1, false, true, "death.attack.player");
+
+        assertTrue(dernier().contains("\"weapon_obfuscated\":false"));
+        assertTrue(dernier().contains("\"offline_killer\":true"));
+    }
+
+    @Test
+    void nEmetQueLesProprietesDeclareesPourUneMort() {
+        telemetry().deathObfuscated(2, true, false, "death.attack.player");
+
+        assertEquals(avec("obfuscated_count", "weapon_obfuscated", "offline_killer", "death_key"),
+                JsonProbe.propertyKeys(dernier()));
     }
 
     @Test
@@ -97,6 +152,7 @@ class TelemetryTest {
 
         assertTrue(dernier().contains("\"event\":\"obfuscation_failed\""));
         assertTrue(dernier().contains("\"error_type\":\"IllegalStateException\""));
+        assertEquals(avec("error_type"), JsonProbe.propertyKeys(dernier()));
     }
 
     @Test
@@ -113,6 +169,7 @@ class TelemetryTest {
 
         assertTrue(dernier().contains("\"event\":\"command_used\""));
         assertTrue(dernier().contains("\"subcommand\":\"reload\""));
+        assertEquals(avec("subcommand"), JsonProbe.propertyKeys(dernier()));
     }
 
     @Test
@@ -122,22 +179,40 @@ class TelemetryTest {
         assertTrue(dernier().contains("\"event\":\"session_heartbeat\""));
         assertTrue(dernier().contains("\"uptime_minutes\":30"));
         assertTrue(dernier().contains("\"deaths_obfuscated\":7"));
+        assertEquals(avec("uptime_minutes", "deaths_obfuscated"), JsonProbe.propertyKeys(dernier()));
     }
 
-    @Test
-    void identifieToujoursLeServeurEtJamaisUnJoueur() {
+    /** Émet les cinq événements du plugin, pour les vérifications transversales ci-dessous. */
+    private void emetLesCinqEvenements() {
         Telemetry t = telemetry();
         t.pluginEnabled("1.21.11-132", 8, true, true, true);
         t.deathObfuscated(1, false, false, "death.attack.player");
         t.obfuscationFailed(new IllegalStateException("boum"));
         t.commandUsed("reload");
         t.sessionHeartbeat(30, 7);
-
         assertEquals(5, envoyes.size());
+    }
+
+    @Test
+    void identifieToujoursLeServeurEtJamaisUnJoueur() {
+        emetLesCinqEvenements();
+
         for (String body : envoyes) {
+            // L'ensemble exact remplace la recherche de littéraux choisis d'avance : c'est la
+            // seule forme d'assertion qui puisse échouer sur une propriété inattendue dont on
+            // n'aurait, par construction, pas deviné le nom.
+            assertEquals(CLES_ENVELOPPE, JsonProbe.envelopeKeys(body));
             assertTrue(body.contains("\"distinct_id\":\"install-42\""));
-            assertFalse(body.contains("username"));
-            assertFalse(body.contains("player_ip"));
+        }
+    }
+
+    @Test
+    void demandeAPostHogDeNeCapturerNiIpNiGeolocalisationSurChaqueEvenement() {
+        emetLesCinqEvenements();
+
+        for (String body : envoyes) {
+            assertTrue(body.contains("\"$ip\":null"), body);
+            assertFalse(body.contains("\"$ip\":\"null\""), body);
         }
     }
 
@@ -206,5 +281,40 @@ class TelemetryTest {
         telemetry().deathObfuscated(1, false, false, null);
 
         assertTrue(dernier().contains("\"death_key\":\"invalid\""));
+    }
+
+    /**
+     * Le préfixe {@code death.} ne suffit pas : un message rendu commençant par une clé
+     * — ce que produirait un plugin tiers qui préfixe ses messages — porte un pseudo. Seul le
+     * préfixe absent était testé jusqu'ici, ce qui laissait ce chemin sans couverture.
+     */
+    @Test
+    void remplaceParInvalidUneCleAuBonPrefixeMaisAuMauvaisFormat() {
+        telemetry().deathObfuscated(1, false, false, "death.attack.player: Zeffut");
+
+        assertTrue(dernier().contains("\"death_key\":\"invalid\""));
+        assertFalse(dernier().contains("Zeffut"));
+    }
+
+    @Test
+    void remplaceParInvalidUneCleAuBonFormatMaisTropLongue() {
+        // 6 + 59 = 65 caractères, un de plus que le plafond, et sans aucun caractère interdit :
+        // seule la longueur peut la faire rejeter.
+        String tropLongue = "death." + "a".repeat(59);
+
+        telemetry().deathObfuscated(1, false, false, tropLongue);
+
+        assertTrue(dernier().contains("\"death_key\":\"invalid\""));
+        assertFalse(dernier().contains(tropLongue));
+    }
+
+    @Test
+    void laisseIntacteUneCleExactementALaLongueurMaximale() {
+        String limite = "death." + "a".repeat(58);
+        assertEquals(64, limite.length());
+
+        telemetry().deathObfuscated(1, false, false, limite);
+
+        assertTrue(dernier().contains("\"death_key\":\"" + limite + "\""));
     }
 }

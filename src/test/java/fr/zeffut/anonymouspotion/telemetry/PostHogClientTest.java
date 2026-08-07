@@ -4,13 +4,28 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import fr.zeffut.anonymouspotion.JsonProbe;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class PostHogClientTest {
+
+    /**
+     * Les propriétés que le client joint lui-même à 100 % du trafic, quelle que soit l'événement.
+     * Énumérées ici en toutes lettres : c'est la divulgation du README qui est vérifiée, donc
+     * l'ensemble doit être exact — toute propriété ajoutée au corps sans être documentée fait
+     * échouer les tests qui comparent à cet ensemble.
+     */
+    private static final Set<String> PROPRIETES_COMMUNES =
+            Set.of("app", "source", "mc_version", "component_version", "$ip");
+
+    /** Les clés de l'enveloppe de la Capture API, elles aussi exhaustives. */
+    private static final Set<String> CLES_ENVELOPPE =
+            Set.of("api_key", "event", "distinct_id", "timestamp", "properties");
 
     private final List<String> envoyes = new ArrayList<>();
 
@@ -80,11 +95,31 @@ class PostHogClientTest {
     }
 
     @Test
-    void neTransmetAucuneProprieteNonFournie() {
+    void nEnvoieExactementQueLesProprietesCommunesQuandAucuneProprieteMetier() {
         String body = client(true).buildBody("death_obfuscated", "install-42", Map.of());
 
-        assertFalse(body.contains("username"));
-        assertFalse(body.contains("player_ip"));
+        assertEquals(PROPRIETES_COMMUNES, JsonProbe.propertyKeys(body));
+    }
+
+    @Test
+    void nAjouteRienAuxProprietesMetierFournies() {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("obfuscated_count", 2);
+        props.put("death_key", "death.attack.player");
+
+        String body = client(true).buildBody("death_obfuscated", "install-42", props);
+
+        Set<String> attendues = new java.util.HashSet<>(PROPRIETES_COMMUNES);
+        attendues.add("obfuscated_count");
+        attendues.add("death_key");
+        assertEquals(attendues, JsonProbe.propertyKeys(body));
+    }
+
+    @Test
+    void nEnvoieExactementQueLesClesDEnveloppeAttendues() {
+        String body = client(true).buildBody("death_obfuscated", "install-42", Map.of());
+
+        assertEquals(CLES_ENVELOPPE, JsonProbe.envelopeKeys(body));
     }
 
     /**
