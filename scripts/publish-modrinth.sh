@@ -33,10 +33,21 @@ CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: $MODRINTH_TOKEN
 [ "$CODE" = "200" ] || { echo "Token Modrinth invalide (HTTP $CODE)" >&2; exit 1; }
 
 BODY=$(python3 -c 'import json,sys; print(json.dumps(open("docs/modrinth-description.md").read()))')
+CHANGELOG_FILE="docs/changelogs/$VERSION.md"
+[ -f "$CHANGELOG_FILE" ] || { echo "Changelog absent : $CHANGELOG_FILE" >&2; exit 1; }
+CHANGELOG=$(python3 -c "import json;print(json.dumps(open('$CHANGELOG_FILE').read()))")
 
 # ---------- 1. Le projet, s'il n'existe pas déjà ----------
 if curl -sf -o /dev/null -H "Authorization: $MODRINTH_TOKEN" "$API/project/$SLUG"; then
-    echo "Projet $SLUG déjà présent, on passe à la version."
+    # La fiche évolue avec le plugin : on la resynchronise à chaque publication,
+    # sans quoi la description en ligne décrirait une version antérieure.
+    echo "Projet $SLUG déjà présent, mise à jour de la description…"
+    printf '{"body": %s}' "$BODY" > /tmp/ap-body.json
+    curl -sS -X PATCH "$API/project/$SLUG" \
+        -H "Authorization: $MODRINTH_TOKEN" \
+        -H "Content-Type: application/json" \
+        --data @/tmp/ap-body.json -w '  -> HTTP %{http_code}\n' -o /dev/null
+    rm -f /tmp/ap-body.json
 else
     echo "Création du projet ${SLUG}…"
     cat > /tmp/ap-project.json <<JSON
@@ -73,7 +84,7 @@ cat > /tmp/ap-version.json <<JSON
 {
   "name": "AnonymousPotion $VERSION",
   "version_number": "$VERSION",
-  "changelog": "First release.\n\nPlayers under Invisibility have their username replaced with obfuscated text in death messages — unless they are the victim, in which case their name is shown in plain text.\n\n- Every kind of death: melee, bow, trident, indirect deaths\n- Hover and click stripped from the obfuscated name: no leak of the real username or UUID\n- Custom weapon names obfuscated too, switchable off\n- A killer who disconnects stays anonymous for 60 seconds\n- Fail-closed: on error the message is dropped rather than sent through\n\nRequires Paper 1.21.11 and Java 21. No dependencies.",
+  "changelog": $CHANGELOG,
   "dependencies": [],
   "game_versions": $GAME_VERSIONS,
   "version_type": "release",
