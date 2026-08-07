@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Crée le projet Modrinth AnonymousPotion et y publie une version.
 #
-# Prérequis : MODRINTH_TOKEN dans ~/.claude/secrets.env, avec les scopes
-# Create projects / Write projects / Create versions / Write versions.
+# Prérequis : MODRINTH_TOKEN dans ~/.claude/.mc-secrets.env (source unique,
+# cf. ~/.claude/mc-conventions.md).
 #
 # Le projet est créé en BROUILLON : il n'est pas soumis à la revue Modrinth.
 # Ajouter le logo puis soumettre depuis l'interface.
@@ -20,11 +20,18 @@ GAME_VERSIONS='["1.21.11"]'
 
 [ -f "$JAR" ] || { echo "Jar absent — lancer ./gradlew build" >&2; exit 1; }
 
+set -a
 # shellcheck disable=SC1090
-source ~/.claude/secrets.env
-: "${MODRINTH_TOKEN:?MODRINTH_TOKEN absent de ~/.claude/secrets.env}"
+source ~/.claude/.mc-secrets.env
+set +a
+: "${MODRINTH_TOKEN:?MODRINTH_TOKEN absent de ~/.claude/.mc-secrets.env}"
 
 API="https://api.modrinth.com/v2"
+
+# Les conventions imposent de vérifier la validité du token avant toute publication.
+CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: $MODRINTH_TOKEN" "$API/user")
+[ "$CODE" = "200" ] || { echo "Token Modrinth invalide (HTTP $CODE)" >&2; exit 1; }
+
 BODY=$(python3 -c 'import json,sys; print(json.dumps(open("docs/modrinth-description.md").read()))')
 
 # ---------- 1. Le projet, s'il n'existe pas déjà ----------
@@ -41,7 +48,8 @@ else
   "categories": ["game-mechanics", "social", "utility"],
   "client_side": "unsupported",
   "server_side": "required",
-  "license_id": "MIT",
+  "license_id": "LicenseRef-PolyForm-Noncommercial-1.0.0",
+  "license_url": "https://polyformproject.org/licenses/noncommercial/1.0.0",
   "project_type": "mod",
   "is_draft": true,
   "initial_versions": [],
