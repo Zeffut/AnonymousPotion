@@ -17,10 +17,10 @@ public final class AnonymousPotionPlugin extends JavaPlugin {
         demarrage = System.currentTimeMillis();
         saveDefaultConfig();
         reloadSettings();
-        getServer().getPluginManager().registerEvents(new DeathMessageListener(this), this);
-        java.util.Objects.requireNonNull(getCommand("anonymouspotion"))
-                .setExecutor(new ReloadCommand(this));
 
+        // Initialisée avant registerEvents(...) : le listener ne doit structurellement jamais
+        // pouvoir observer plugin.telemetry() == null, plutôt que de dépendre du modèle
+        // mono-thread de Bukkit pour l'éviter.
         boolean telemetryEnabled = getConfig().getBoolean("telemetry", true);
         String telemetryHost = getConfig().getString("telemetry-host", PostHogClient.DEFAULT_HOST);
         PostHogClient client = new PostHogClient(telemetryEnabled, telemetryHost, "paper",
@@ -29,6 +29,10 @@ public final class AnonymousPotionPlugin extends JavaPlugin {
         telemetry.pluginEnabled(getServer().getBukkitVersion(),
                 config.obfuscatedLength(), config.obfuscateWeaponName(),
                 config.logRealNames(), getServer().getOnlineMode());
+
+        getServer().getPluginManager().registerEvents(new DeathMessageListener(this), this);
+        java.util.Objects.requireNonNull(getCommand("anonymouspotion"))
+                .setExecutor(new ReloadCommand(this));
 
         // 36 000 ticks valent 30 minutes ; le premier battement part après 30 minutes, pas au
         // démarrage, où plugin_enabled fait déjà le travail.

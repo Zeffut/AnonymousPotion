@@ -44,9 +44,18 @@ No player ever sees the real username — operators included. The gameplay is th
 The plugin sends anonymous usage statistics to PostHog. Set `telemetry: false` in
 `config.yml` to turn it off.
 
-**What is sent:** a random installation id generated on first start, the server version, the
-plugin settings, and counters — how many names were obfuscated per death, the kind of death
-(the vanilla translation key), and any errors.
+**What is sent:** a random installation id generated on first start, plus five events:
+
+- **`plugin_enabled`** (on startup): server version, `obfuscated-length`,
+  `obfuscate-weapon-name`, `log-real-names`, and the server's online mode (a server setting,
+  not a plugin setting).
+- **`death_obfuscated`** (each death where a name was obfuscated): how many names were
+  obfuscated, whether the weapon name was too, whether one of the killers was offline, and
+  the kind of death (the vanilla translation key, never the rendered text).
+- **`obfuscation_failed`** (if obfuscation fails): the Java exception type, never its message.
+- **`command_used`** (each `/anonymouspotion` command): the subcommand used (`reload`).
+- **`session_heartbeat`** (every 30 minutes): server uptime and how many deaths have been
+  obfuscated since startup.
 
 **What is never sent:** no usernames, no IP addresses, no player UUIDs, no message contents.
 This plugin exists to stop a username from leaking — it is not going to ship those same
