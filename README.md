@@ -30,8 +30,49 @@ Déposer `AnonymousPotion.jar` dans le dossier `plugins/`, puis redémarrer le s
 | `filler-character` | `a` | Caractère de base. Minecraft remplace chaque caractère par un glyphe de même largeur, ce réglage fixe donc la largeur affichée. |
 | `obfuscate-weapon-name` | `true` | Brouille aussi le nom des armes personnalisées, qui peuvent trahir le tueur. |
 | `log-real-names` | `true` | Écrit dans les logs serveur le pseudo réel des joueurs brouillés. |
+| `telemetry` | `true` | Envoi de statistiques d'usage anonymes. `false` coupe tout envoi. |
+| `telemetry-host` | `https://eu.i.posthog.com` | Adresse de l'instance PostHog destinataire. À changer pour viser une instance auto-hébergée. |
 
 `/anonymouspotion reload` recharge à chaud (permission `anonymouspotion.admin`, OP par défaut).
+
+## Télémétrie
+
+Le plugin envoie des statistiques d'usage anonymes à PostHog. `telemetry: false` dans
+`config.yml` les désactive.
+
+**Ce qui est envoyé :** un identifiant d'installation tiré au hasard au premier démarrage,
+quatre propriétés jointes à tous les événements, plus cinq événements.
+
+Les quatre propriétés présentes sur chaque événement, quel qu'il soit :
+
+- **`app`** : le nom court du plugin, toujours `anonymouspotion`. Il distingue ce plugin des
+  autres projets qui partagent le même projet PostHog.
+- **`source`** : la plateforme du serveur, toujours `paper`.
+- **`mc_version`** : la version de Minecraft du serveur, par exemple `1.21.11`.
+- **`component_version`** : la version du plugin, par exemple `1.0.0`.
+
+Le corps envoyé porte en plus `$ip` à `null` : ce n'est pas une donnée, c'est la consigne qui
+demande à PostHog de ne pas relever l'adresse IP de la requête ni d'en déduire une
+géolocalisation. Sans elle, l'IP publique du serveur serait enregistrée par le service.
+
+Les cinq événements :
+
+- **`plugin_enabled`** (au démarrage) : version du serveur, `obfuscated-length`,
+  `obfuscate-weapon-name`, `log-real-names`, et le mode en ligne du serveur (un réglage du
+  serveur, pas du plugin).
+- **`death_obfuscated`** (à chaque mort dont le pseudo a été brouillé) : nombre de pseudos
+  brouillés, si un nom d'arme a effectivement été brouillé à cette mort-là, si l'un des tueurs
+  était hors ligne, et le type de mort (la clé de traduction vanilla, jamais le texte affiché).
+- **`obfuscation_failed`** (en cas d'échec du brouillage) : le type de l'erreur Java, jamais
+  son message.
+- **`command_used`** (à chaque commande `/anonymouspotion`) : la sous-commande utilisée
+  (`reload`).
+- **`session_heartbeat`** (toutes les 30 minutes) : la durée de fonctionnement du serveur et
+  le nombre de morts brouillées depuis le démarrage.
+
+**Ce qui ne l'est jamais :** aucun pseudo, aucune adresse IP, aucun UUID de joueur, aucun
+contenu de message. Ce plugin existe pour empêcher un pseudo de fuiter — il ne va pas
+expédier ces mêmes pseudos ailleurs.
 
 ## Limitations connues
 

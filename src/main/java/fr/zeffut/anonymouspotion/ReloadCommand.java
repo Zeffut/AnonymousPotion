@@ -25,6 +25,7 @@ public final class ReloadCommand implements CommandExecutor {
 
         plugin.reloadSettings();
         sender.sendMessage(Component.text("Configuration d'AnonymousPotion rechargée.", NamedTextColor.GREEN));
+        plugin.telemetry().commandUsed("reload");
         return true;
     }
 }
