@@ -65,6 +65,15 @@ public final class PostHogClient {
         props.put("component_version", componentVersion);
         if (properties != null) props.putAll(properties);
 
+        // Sans cette ligne, la divulgation du plugin serait fausse. Le code n'envoie aucune IP,
+        // mais la Capture API renseigne elle-même $ip à partir de l'IP source de la requête HTTP
+        // et en dérive les propriétés $geoip_*, persistées sur l'event ET sur le profil rattaché
+        // au distinct_id : l'IP publique du serveur et sa géolocalisation finiraient stockées
+        // chez un tiers. La valeur null — le littéral JSON, pas la chaîne "null" — est la consigne
+        // que PostHog reconnaît pour ne capturer ni l'IP ni la géolocalisation. Posée après le
+        // putAll pour qu'aucune propriété métier ne puisse structurellement l'écraser.
+        props.put("$ip", null);
+
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("api_key", API_KEY);
         root.put("event", event);

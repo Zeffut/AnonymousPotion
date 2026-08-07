@@ -86,4 +86,31 @@ class PostHogClientTest {
         assertFalse(body.contains("username"));
         assertFalse(body.contains("player_ip"));
     }
+
+    /**
+     * Le code n'envoie aucune IP, mais la Capture API renseigne {@code $ip} depuis l'IP source
+     * de la requête HTTP et en dérive les {@code $geoip_*}, persistées sur l'event et sur le
+     * profil. {@code "$ip":null} est la consigne qui coupe cette capture ; sans elle, la
+     * promesse « aucune adresse IP n'est transmise » du README serait fausse.
+     */
+    @Test
+    void demandeAPostHogDeNeCapturerNiIpNiGeolocalisation() {
+        String body = client(true).buildBody("death_obfuscated", "install-42", Map.of());
+
+        assertTrue(body.contains("\"$ip\":null"), body);
+        // La chaîne "null" serait une valeur d'IP quelconque pour PostHog, donc sans effet.
+        assertFalse(body.contains("\"$ip\":\"null\""), body);
+    }
+
+    /** Une propriété métier ne doit pas pouvoir écraser la consigne, même en portant son nom. */
+    @Test
+    void neLaissePasUneProprieteMetierEcraserLaConsigneIp() {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("$ip", "203.0.113.7");
+
+        String body = client(true).buildBody("death_obfuscated", "install-42", props);
+
+        assertTrue(body.contains("\"$ip\":null"), body);
+        assertFalse(body.contains("203.0.113.7"), body);
+    }
 }
