@@ -21,6 +21,9 @@ public final class Telemetry {
      */
     private static final Pattern DEATH_KEY_PATTERN = Pattern.compile("^[A-Za-z0-9._]+$");
 
+    /** Repli prévu par le câblage de la tâche 3 quand le message n'est pas traduisible. */
+    private static final String UNKNOWN_DEATH_KEY = "unknown";
+
     private final PostHogClient client;
     private final String serverInstallId;
 
@@ -43,20 +46,27 @@ public final class Telemetry {
 
     /**
      * {@code deathKey} doit être la clé de traduction vanilla, jamais le message rendu. Garde
-     * exécutable : toute valeur qui ne respecte pas le format d'une clé (lettres, chiffres,
-     * points, tirets bas), y compris {@code null}, est remplacée par {@code "invalid"} avant
-     * l'envoi, ce qui empêche un message rendu — qui contient forcément des espaces — de fuiter.
+     * exécutable : une valeur n'est acceptée que si elle respecte le format d'une clé (lettres,
+     * chiffres, points, tirets bas) ET qu'elle commence par {@code death.} ou vaut exactement
+     * {@code "unknown"} ; toute autre valeur, y compris {@code null} ou un pseudo brut sans
+     * espace (ex. {@code "Steve_99"}), est remplacée par {@code "invalid"} avant l'envoi.
      */
     public void deathObfuscated(int obfuscatedCount, boolean weaponObfuscated,
                                 boolean offlineKiller, String deathKey) {
-        String safeDeathKey = deathKey != null && DEATH_KEY_PATTERN.matcher(deathKey).matches()
-                ? deathKey : "invalid";
+        String safeDeathKey = isValidDeathKey(deathKey) ? deathKey : "invalid";
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("obfuscated_count", obfuscatedCount);
         p.put("weapon_obfuscated", weaponObfuscated);
         p.put("offline_killer", offlineKiller);
         p.put("death_key", safeDeathKey);
         client.capture("death_obfuscated", serverInstallId, p);
+    }
+
+    private static boolean isValidDeathKey(String deathKey) {
+        if (deathKey == null || !DEATH_KEY_PATTERN.matcher(deathKey).matches()) {
+            return false;
+        }
+        return deathKey.startsWith("death.") || deathKey.equals(UNKNOWN_DEATH_KEY);
     }
 
     /**
