@@ -75,17 +75,37 @@ public final class AnonymousPotionPlugin extends JavaPlugin {
                 getLogger()::warning);
     }
 
-    /** Identifiant anonyme et stable de cette installation, tiré au premier démarrage. */
+    /**
+     * Identifiant de repli quand le fichier n'est ni lisible ni inscriptible. Tiré une seule
+     * fois par vie de JVM, et non à chaque appel : un serveur dont le dossier de données n'est
+     * pas inscriptible ne peut pas persister son identifiant, mais le redessiner à chaque
+     * démarrage le ferait compter comme une installation neuve à chaque fois et gonflerait les
+     * statistiques d'installations.
+     */
+    private static final String IDENTIFIANT_DE_REPLI = "unknown-" + java.util.UUID.randomUUID();
+
+    /**
+     * Identifiant anonyme et stable de cette installation, tiré au premier démarrage. Ne
+     * contient rien de personnel : c'est un UUID aléatoire, sans lien avec un joueur ni avec
+     * l'adresse du serveur.
+     */
     private String loadOrCreateInstallId() {
         java.io.File f = new java.io.File(getDataFolder(), ".install-id");
         try {
-            if (f.exists()) return java.nio.file.Files.readString(f.toPath()).trim();
+            if (f.exists()) {
+                String existant = java.nio.file.Files.readString(f.toPath()).trim();
+                // Un fichier vide ou blanc — écriture interrompue, disque plein, édition
+                // manuelle — donnerait un distinct_id vide, que PostHog rattacherait à un
+                // profil fourre-tout partagé par toutes les installations dans ce cas. On le
+                // traite donc comme absent, ce qui en tire un neuf et réécrit le fichier.
+                if (!existant.isEmpty()) return existant;
+            }
             String id = java.util.UUID.randomUUID().toString();
             getDataFolder().mkdirs();
             java.nio.file.Files.writeString(f.toPath(), id);
             return id;
         } catch (Exception e) {
-            return "unknown-" + java.util.UUID.randomUUID();
+            return IDENTIFIANT_DE_REPLI;
         }
     }
 }

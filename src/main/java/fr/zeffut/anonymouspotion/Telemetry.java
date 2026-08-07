@@ -21,6 +21,14 @@ public final class Telemetry {
      */
     private static final Pattern DEATH_KEY_PATTERN = Pattern.compile("^[A-Za-z0-9._]+$");
 
+    /**
+     * Plafond de longueur : la plus longue clé {@code death.*} de 1.21.11 fait 36 caractères,
+     * donc 64 laisse toute la marge utile. Sans plafond, la garde accepterait une chaîne de
+     * longueur arbitraire du moment qu'elle commence par {@code death.} et ne contient que des
+     * caractères de clé — ce n'est plus une clé de traduction à ce stade.
+     */
+    private static final int MAX_DEATH_KEY_LENGTH = 64;
+
     /** Repli prévu par le câblage de la tâche 3 quand le message n'est pas traduisible. */
     private static final String UNKNOWN_DEATH_KEY = "unknown";
 
@@ -45,11 +53,17 @@ public final class Telemetry {
     }
 
     /**
-     * {@code deathKey} doit être la clé de traduction vanilla, jamais le message rendu. Garde
+     * {@code weaponObfuscated} est le fait constaté à cette mort — un nœud d'item a réellement
+     * été remplacé — et non le réglage {@code obfuscate-weapon-name} du serveur, déjà émis par
+     * {@code plugin_enabled}.
+     *
+     * <p>{@code deathKey} doit être la clé de traduction vanilla, jamais le message rendu. Garde
      * exécutable : une valeur n'est acceptée que si elle respecte le format d'une clé (lettres,
-     * chiffres, points, tirets bas) ET qu'elle commence par {@code death.} ou vaut exactement
-     * {@code "unknown"} ; toute autre valeur, y compris {@code null} ou un pseudo brut sans
-     * espace (ex. {@code "Steve_99"}), est remplacée par {@code "invalid"} avant l'envoi.
+     * chiffres, points, tirets bas), qu'elle ne dépasse pas {@value #MAX_DEATH_KEY_LENGTH}
+     * caractères, ET qu'elle commence par {@code death.} ou vaut exactement {@code "unknown"} ;
+     * toute autre valeur — {@code null}, un pseudo brut sans espace (ex. {@code "Steve_99"}), ou
+     * une chaîne au bon préfixe mais au mauvais format (ex. {@code "death.attack.player: Zeffut"})
+     * — est remplacée par {@code "invalid"} avant l'envoi.
      */
     public void deathObfuscated(int obfuscatedCount, boolean weaponObfuscated,
                                 boolean offlineKiller, String deathKey) {
@@ -63,7 +77,8 @@ public final class Telemetry {
     }
 
     private static boolean isValidDeathKey(String deathKey) {
-        if (deathKey == null || !DEATH_KEY_PATTERN.matcher(deathKey).matches()) {
+        if (deathKey == null || deathKey.length() > MAX_DEATH_KEY_LENGTH
+                || !DEATH_KEY_PATTERN.matcher(deathKey).matches()) {
             return false;
         }
         return deathKey.startsWith("death.") || deathKey.equals(UNKNOWN_DEATH_KEY);

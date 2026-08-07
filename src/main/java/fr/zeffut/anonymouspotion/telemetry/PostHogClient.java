@@ -4,6 +4,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -18,14 +19,20 @@ public final class PostHogClient {
 
     public static final String API_KEY = "phc_zdMj4p5wo8EvfVApjb2EbfUHJ76zgYGM5wAGz5YJC359";
     public static final String DEFAULT_HOST = "https://eu.i.posthog.com";
-    /** App slug attached to every event so a shared PostHog project can segment by mod. */
+    /** Slug de l'application, joint à chaque event pour segmenter un projet PostHog partagé. */
     public static final String APP = "anonymouspotion";
+
+    /** Délai d'établissement de connexion. Sans lui, un pare-feu qui jette le trafic sortant
+     * laisse la connexion pendante jusqu'au timeout TCP du système. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+
+    /** Délai de la requête entière, une fois la connexion établie. */
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
     /** Couture de test : implémentation réseau réelle ou mock. */
     public interface Sender { void send(String jsonBody); }
 
     private final boolean enabled;
-    private final String host;
     private final String source;
     private final String mcVersion;
     private final String componentVersion;
@@ -41,7 +48,6 @@ public final class PostHogClient {
     public PostHogClient(boolean enabled, String host, String source,
                          String mcVersion, String componentVersion, Sender sender) {
         this.enabled = enabled;
-        this.host = host;
         this.source = source;
         this.mcVersion = mcVersion;
         this.componentVersion = componentVersion;
@@ -108,11 +114,15 @@ public final class PostHogClient {
             });
 
     private static Sender httpSender(String host) {
-        HttpClient http = HttpClient.newBuilder().executor(EXECUTOR).build();
+        HttpClient http = HttpClient.newBuilder()
+                .connectTimeout(CONNECT_TIMEOUT)
+                .executor(EXECUTOR)
+                .build();
         String url = host.replaceAll("/+$", "") + "/i/v0/e/";
         return body -> {
             HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                     .header("Content-Type", "application/json")
+                    .timeout(REQUEST_TIMEOUT)
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
             http.sendAsync(req, HttpResponse.BodyHandlers.discarding());
