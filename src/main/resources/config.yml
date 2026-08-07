@@ -18,7 +18,7 @@ log-real-names: true
 
 # Télémétrie anonyme (PostHog) — passer à false pour la désactiver.
 # Aucune donnée personnelle n'est transmise : ni pseudo, ni adresse IP, ni UUID de joueur,
-# ni contenu de message. Seuls sont envoyés un identifiant d'installation tiré au hasard,
-# la version du serveur, les réglages ci-dessus et des compteurs de morts brouillées.
+# ni contenu de message. Liste complète des événements et propriétés envoyés dans le README,
+# section "Télémétrie".
 telemetry: true
 telemetry-host: "https://eu.i.posthog.com"
