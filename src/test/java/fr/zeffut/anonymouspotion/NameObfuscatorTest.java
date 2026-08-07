@@ -231,6 +231,49 @@ class NameObfuscatorTest {
         assertSame(message, obfuscator.obfuscate(message, Set.of()));
     }
 
+    // --- Constat de brouillage d'arme --------------------------------------------------------
+    // C'est ce constat, et non le réglage obfuscate-weapon-name, qui alimente la propriété
+    // weapon_obfuscated de la télémétrie : le réglage vaudrait vrai sur 100 % des morts d'un
+    // serveur qui l'active, noyades et chutes comprises.
+
+    @Test
+    void signaleUnNomDArmeBrouilleQuandLeMessagePorteUnItem() {
+        obfuscator.obfuscate(deathMessageWithItem("Excalibur"), Set.of(KILLER_ID));
+
+        assertTrue(obfuscator.weaponObfuscated());
+    }
+
+    @Test
+    void neSignaleAucunNomDArmeSurUneMortSansArme() {
+        obfuscator.obfuscate(deathMessage(), Set.of(KILLER_ID));
+
+        assertFalse(obfuscator.weaponObfuscated());
+    }
+
+    @Test
+    void neSignaleAucunNomDArmeQuandLOptionEstDesactivee() {
+        NameObfuscator sansArme = new NameObfuscator(8, 'a', false);
+
+        sansArme.obfuscate(deathMessageWithItem("Excalibur"), Set.of(KILLER_ID));
+
+        assertFalse(sansArme.weaponObfuscated());
+    }
+
+    @Test
+    void neSignaleAucunNomDArmeAvantLePremierAppel() {
+        assertFalse(obfuscator.weaponObfuscated());
+    }
+
+    @Test
+    void oublieLeConstatDArmeDUnAppelPrecedent() {
+        obfuscator.obfuscate(deathMessageWithItem("Excalibur"), Set.of(KILLER_ID));
+        assertTrue(obfuscator.weaponObfuscated());
+
+        obfuscator.obfuscate(deathMessage(), Set.of(KILLER_ID));
+
+        assertFalse(obfuscator.weaponObfuscated());
+    }
+
     // --- Sélection des cibles ---------------------------------------------------------------
     // La règle « la victime garde son pseudo en clair, même invisible » est la seule exception
     // du design. Ces tests échouent si on supprime la ligne qui l'implémente.

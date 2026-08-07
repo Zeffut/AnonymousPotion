@@ -24,6 +24,14 @@ public final class NameObfuscator {
     private final String replacement;
     private final boolean obfuscateWeaponName;
 
+    /**
+     * Vrai dès qu'un nœud d'item a réellement été remplacé pendant le dernier
+     * {@link #obfuscate(Component, Set)}. Le réglage {@code obfuscate-weapon-name} ne dit que
+     * ce que le serveur autorise ; seul ce drapeau dit ce qui s'est produit à cette mort — la
+     * plupart des morts (noyade, chute, poing nu) ne portent aucun nœud d'item.
+     */
+    private boolean weaponObfuscated;
+
     public NameObfuscator(int length, char filler, boolean obfuscateWeaponName) {
         this.replacement = String.valueOf(filler).repeat(length);
         this.obfuscateWeaponName = obfuscateWeaponName;
@@ -34,10 +42,20 @@ public final class NameObfuscator {
      * par un texte obfusqué. Le message d'origine est retourné tel quel si rien ne change.
      */
     public Component obfuscate(Component message, Set<UUID> targets) {
+        weaponObfuscated = false;
         if (targets.isEmpty()) {
             return message;
         }
         return walk(message, targets);
+    }
+
+    /**
+     * Un nom d'arme a-t-il effectivement été brouillé lors du dernier appel à
+     * {@link #obfuscate(Component, Set)} ? Faux tant qu'aucun appel n'a eu lieu. L'instance
+     * étant créée à chaque mort, la réponse porte bien sur cette mort-là.
+     */
+    public boolean weaponObfuscated() {
+        return weaponObfuscated;
     }
 
     private Component walk(Component input, Set<UUID> targets) {
@@ -47,6 +65,7 @@ public final class NameObfuscator {
         }
 
         if (obfuscateWeaponName && isItem(input)) {
+            weaponObfuscated = true;
             return obfuscatedItem(input);
         }
 

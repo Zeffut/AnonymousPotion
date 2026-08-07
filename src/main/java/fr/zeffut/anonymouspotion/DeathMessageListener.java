@@ -60,14 +60,13 @@ public final class DeathMessageListener implements Listener {
 
             event.deathMessage(obfuscated);
 
-            // Après coup, uniquement quand le brouillage a réussi : capture() avale déjà toute
-            // erreur, donc ces appels ne peuvent pas faire échouer ce try ni déclencher le
-            // fail-closed du catch ci-dessous.
-            boolean weaponObfuscated = config.obfuscateWeaponName();
-            boolean offlineKiller = anyOffline(targets);
-            plugin.countObfuscatedDeath();
-            plugin.telemetry().deathObfuscated(targets.size(), weaponObfuscated,
-                    offlineKiller, deathKey(message));
+            // Après coup, uniquement quand le brouillage a réussi. Ces appels sont isolés dans
+            // leur propre try : capture() n'avale que ses propres erreurs, alors que le reste
+            // du chemin peut lever (anyOffline appelle Bukkit.getPlayer pour chaque cible,
+            // plugin.telemetry() déréférence un champ non final). Sans cette isolation, une
+            // levée ici serait rattrapée par le catch ci-dessous, qui effacerait un message
+            // pourtant correctement brouillé et émettrait un obfuscation_failed mensonger.
+            captureDeathTelemetry(targets, obfuscator.weaponObfuscated(), message);
         } catch (Throwable erreur) {
             // Throwable et non RuntimeException : un StackOverflowError, que le parcours
             // récursif d'un message anormalement profond peut lever, traverserait un catch
@@ -79,6 +78,27 @@ public final class DeathMessageListener implements Listener {
             plugin.getLogger().log(Level.SEVERE,
                     "Échec du brouillage du message de mort, message supprimé par sécurité.", erreur);
             plugin.telemetry().obfuscationFailed(erreur);
+        }
+    }
+
+    /**
+     * Comptabilise la mort et l'envoie à la télémétrie, sans jamais rien propager. Le message
+     * de mort est déjà publié quand cette méthode s'exécute : une panne de télémétrie ne doit
+     * pas dégrader le plugin, et surtout pas détruire un message correctement brouillé.
+     *
+     * <p>{@code weaponObfuscated} est le fait constaté par l'obfuscateur pour cette mort-là,
+     * pas le réglage {@code obfuscate-weapon-name} du serveur : ce dernier vaudrait vrai sur
+     * toutes les morts, noyades et chutes comprises, et doublonnerait avec la propriété
+     * {@code obfuscate_weapon_name} déjà émise par {@code plugin_enabled}.
+     */
+    private void captureDeathTelemetry(Set<UUID> targets, boolean weaponObfuscated, Component message) {
+        try {
+            plugin.countObfuscatedDeath();
+            plugin.telemetry().deathObfuscated(targets.size(), weaponObfuscated,
+                    anyOffline(targets), deathKey(message));
+        } catch (Throwable ignoree) {
+            // Volontairement silencieux : journaliser ici demanderait plugin.getLogger(), qui
+            // peut lever pour les mêmes raisons que ce qu'on rattrape.
         }
     }
 
