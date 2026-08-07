@@ -99,11 +99,30 @@ class TelemetryTest {
     }
 
     @Test
+    void laisseIntactesLesVraiesClesVanillaEnCamelCase() {
+        telemetry().deathObfuscated(1, false, false, "death.attack.onFire");
+        assertTrue(dernier().contains("\"death_key\":\"death.attack.onFire\""));
+
+        telemetry().deathObfuscated(1, false, false, "death.attack.lightningBolt");
+        assertTrue(dernier().contains("\"death_key\":\"death.attack.lightningBolt\""));
+
+        telemetry().deathObfuscated(1, false, false, "death.fell.accident.fallingBlock");
+        assertTrue(dernier().contains("\"death_key\":\"death.fell.accident.fallingBlock\""));
+    }
+
+    @Test
     void remplaceUnMessageDeMortRenduParInvalid() {
         telemetry().deathObfuscated(1, false, false, "Zeffut a été tué par Steve");
 
         assertTrue(dernier().contains("\"death_key\":\"invalid\""));
         assertFalse(dernier().contains("Zeffut"));
         assertFalse(dernier().contains("Steve"));
+    }
+
+    @Test
+    void remplaceUneCleNulleParInvalidSansLeverDException() {
+        telemetry().deathObfuscated(1, false, false, null);
+
+        assertTrue(dernier().contains("\"death_key\":\"invalid\""));
     }
 }

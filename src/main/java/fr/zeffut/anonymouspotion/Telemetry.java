@@ -14,8 +14,12 @@ import java.util.regex.Pattern;
  */
 public final class Telemetry {
 
-    /** Une clé de traduction vanilla ne contient que minuscules, chiffres, points et tirets bas. */
-    private static final Pattern DEATH_KEY_PATTERN = Pattern.compile("^[a-z0-9._]+$");
+    /**
+     * Une clé de traduction vanilla ne contient que lettres, chiffres, points et tirets bas
+     * (le camelCase existe réellement dans les clés vanilla, ex. {@code death.attack.onFire}) ;
+     * un message rendu contient toujours des espaces, et souvent des accents, donc reste rejeté.
+     */
+    private static final Pattern DEATH_KEY_PATTERN = Pattern.compile("^[A-Za-z0-9._]+$");
 
     private final PostHogClient client;
     private final String serverInstallId;
@@ -39,13 +43,14 @@ public final class Telemetry {
 
     /**
      * {@code deathKey} doit être la clé de traduction vanilla, jamais le message rendu. Garde
-     * exécutable : toute valeur qui ne respecte pas le format d'une clé (minuscules, chiffres,
-     * points, tirets bas) est remplacée par {@code "invalid"} avant l'envoi, ce qui empêche un
-     * message rendu — qui contient forcément espaces et majuscules — de fuiter.
+     * exécutable : toute valeur qui ne respecte pas le format d'une clé (lettres, chiffres,
+     * points, tirets bas), y compris {@code null}, est remplacée par {@code "invalid"} avant
+     * l'envoi, ce qui empêche un message rendu — qui contient forcément des espaces — de fuiter.
      */
     public void deathObfuscated(int obfuscatedCount, boolean weaponObfuscated,
                                 boolean offlineKiller, String deathKey) {
-        String safeDeathKey = DEATH_KEY_PATTERN.matcher(deathKey).matches() ? deathKey : "invalid";
+        String safeDeathKey = deathKey != null && DEATH_KEY_PATTERN.matcher(deathKey).matches()
+                ? deathKey : "invalid";
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("obfuscated_count", obfuscatedCount);
         p.put("weapon_obfuscated", weaponObfuscated);
