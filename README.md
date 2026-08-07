@@ -33,6 +33,19 @@ Déposer `AnonymousPotion.jar` dans le dossier `plugins/`, puis redémarrer le s
 
 `/anonymouspotion reload` recharge à chaud (permission `anonymouspotion.admin`, OP par défaut).
 
+## Télémétrie
+
+Le plugin envoie des statistiques d'usage anonymes à PostHog. `telemetry: false` dans
+`config.yml` les désactive.
+
+**Ce qui est envoyé :** un identifiant d'installation tiré au hasard au premier démarrage,
+la version du serveur, les réglages du plugin, et des compteurs — nombre de pseudos brouillés
+par mort, type de mort (la clé de traduction vanilla), et les erreurs éventuelles.
+
+**Ce qui ne l'est jamais :** aucun pseudo, aucune adresse IP, aucun UUID de joueur, aucun
+contenu de message. Ce plugin existe pour empêcher un pseudo de fuiter — il ne va pas
+expédier ces mêmes pseudos ailleurs.
+
 ## Limitations connues
 
 **L'invisibilité est lue au moment de la mort.** Si l'effet expire pendant le vol d'une flèche,

@@ -6,6 +6,7 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TranslatableComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -58,6 +59,15 @@ public final class DeathMessageListener implements Listener {
             }
 
             event.deathMessage(obfuscated);
+
+            // Après coup, uniquement quand le brouillage a réussi : capture() avale déjà toute
+            // erreur, donc ces appels ne peuvent pas faire échouer ce try ni déclencher le
+            // fail-closed du catch ci-dessous.
+            boolean weaponObfuscated = config.obfuscateWeaponName();
+            boolean offlineKiller = anyOffline(targets);
+            plugin.countObfuscatedDeath();
+            plugin.telemetry().deathObfuscated(targets.size(), weaponObfuscated,
+                    offlineKiller, deathKey(message));
         } catch (Throwable erreur) {
             // Throwable et non RuntimeException : un StackOverflowError, que le parcours
             // récursif d'un message anormalement profond peut lever, traverserait un catch
@@ -68,7 +78,18 @@ public final class DeathMessageListener implements Listener {
             event.deathMessage(null);
             plugin.getLogger().log(Level.SEVERE,
                     "Échec du brouillage du message de mort, message supprimé par sécurité.", erreur);
+            plugin.telemetry().obfuscationFailed(erreur);
         }
+    }
+
+    /** Vrai si l'une des cibles n'est plus en ligne : le cas couvert par la mémoire courte. */
+    private boolean anyOffline(Set<UUID> targets) {
+        return targets.stream().anyMatch(id -> Bukkit.getPlayer(id) == null);
+    }
+
+    /** Clé de traduction du message, jamais son texte rendu. */
+    private static String deathKey(Component message) {
+        return message instanceof TranslatableComponent t ? t.key() : "unknown";
     }
 
     /** Pseudos réels des joueurs brouillés, pour les logs de modération. */

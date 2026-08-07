@@ -39,6 +39,19 @@ No player ever sees the real username — operators included. The gameplay is th
 - Turning `log-real-names` off removes every trace of the killer: the server's own log shows the obfuscated name too, so the option does not merely trim moderation output, it removes it.
 - The plugin rewrites the death message at `HIGHEST` priority. Another plugin that replaces the message with flat text, or that writes after this one, can bypass the obfuscation.
 
+## Telemetry
+
+The plugin sends anonymous usage statistics to PostHog. Set `telemetry: false` in
+`config.yml` to turn it off.
+
+**What is sent:** a random installation id generated on first start, the server version, the
+plugin settings, and counters — how many names were obfuscated per death, the kind of death
+(the vanilla translation key), and any errors.
+
+**What is never sent:** no usernames, no IP addresses, no player UUIDs, no message contents.
+This plugin exists to stop a username from leaking — it is not going to ship those same
+usernames somewhere else.
+
 ## Requirements
 
 Paper 1.21.x, Java 21. No dependencies.
