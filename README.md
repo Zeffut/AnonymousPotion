@@ -1,6 +1,6 @@
 # AnonymousPotion
 
-Plugin Paper 1.21.x. Quand un joueur est sous effet **Invisibilité**, son pseudo n'apparaît
+Plugin Paper 1.21.11 et versions Paper stables ciblées. Quand un joueur est sous effet **Invisibilité**, son pseudo n'apparaît
 jamais dans les messages de mort : il est remplacé par un texte au formatage *obfuscated*,
 que le client anime en faisant défiler des caractères aléatoires.
 
@@ -102,6 +102,14 @@ la checklist ci-dessous avec les autres plugins chargés.
 ```
 
 Le jar est produit dans `build/libs/AnonymousPotion.jar`.
+
+Les cibles Paper vérifiées et leurs toolchains Java sont documentées dans
+[`docs/paper-target-support.md`](docs/paper-target-support.md). Pour construire une cible
+26.x explicitement, par exemple :
+
+```bash
+./gradlew clean test build -PpaperTarget=26.2
+```
 
 ## Checklist de test en jeu
 
