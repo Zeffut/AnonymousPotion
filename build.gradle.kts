@@ -3,9 +3,9 @@ plugins {
 }
 
 group = "fr.zeffut"
-version = "1.1.0"
-
 val paperTarget = providers.gradleProperty("paperTarget").orElse("1.21.11").get()
+// Distinguish the stable 26.3 artifact from the existing beta, including plugin.yml.
+version = if (paperTarget == "26.3") "1.1.0+mc26.3" else "1.1.0"
 val targetConfig = mapOf(
     "1.21.11" to ("1.21.11-R0.1-SNAPSHOT" to 21),
     "26.1.2" to ("26.1.2.build.74-stable" to 25),
