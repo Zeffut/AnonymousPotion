@@ -30,15 +30,20 @@ Déposer `AnonymousPotion.jar` dans le dossier `plugins/`, puis redémarrer le s
 | `filler-character` | `a` | Caractère de base. Minecraft remplace chaque caractère par un glyphe de même largeur, ce réglage fixe donc la largeur affichée. |
 | `obfuscate-weapon-name` | `true` | Brouille aussi le nom des armes personnalisées, qui peuvent trahir le tueur. |
 | `log-real-names` | `true` | Écrit dans les logs serveur le pseudo réel des joueurs brouillés. |
-| `telemetry` | `true` | Envoi de statistiques d'usage anonymes. `false` coupe tout envoi. |
+| `telemetry` | `true` | Active l'envoi de statistiques d'usage pseudonymisées. `false` empêche les événements d'être envoyés après redémarrage complet du serveur. |
 | `telemetry-host` | `https://eu.i.posthog.com` | Adresse de l'instance PostHog destinataire. À changer pour viser une instance auto-hébergée. |
 
-`/anonymouspotion reload` recharge à chaud (permission `anonymouspotion.admin`, OP par défaut).
+`/anonymouspotion reload` recharge à chaud les réglages de gameplay (permission `anonymouspotion.admin`, OP par défaut). Pour appliquer un changement de `telemetry` ou `telemetry-host`, arrête puis redémarre complètement le serveur : `/reload` ne reconfigure pas le client télémétrie déjà créé.
 
 ## Télémétrie
 
-Le plugin envoie des statistiques d'usage anonymes à PostHog. `telemetry: false` dans
-`config.yml` les désactive.
+Le plugin peut envoyer des statistiques d'usage à PostHog. Ces événements utilisent un UUID
+d'installation persistant comme identifiant (`distinct_id`) : ils sont pseudonymisés, pas
+anonymes au sens absolu. `telemetry: false` dans `config.yml`, suivi d'un arrêt puis d'un
+redémarrage complet du serveur, empêche l'envoi d'événements par le client télémétrie.
+La configuration désactivée n'empêche pas nécessairement la création ou la lecture du fichier
+`.install-id` dans le dossier du plugin. `/anonymouspotion reload` seul ne change pas l'état
+du client ; redémarre le serveur pour appliquer l'opt-out de manière fiable.
 
 **Ce qui est envoyé :** un identifiant d'installation tiré au hasard au premier démarrage,
 quatre propriétés jointes à tous les événements, plus cinq événements.
@@ -51,9 +56,10 @@ Les quatre propriétés présentes sur chaque événement, quel qu'il soit :
 - **`mc_version`** : la version de Minecraft du serveur, par exemple `1.21.11`.
 - **`component_version`** : la version du plugin, par exemple `1.0.0`.
 
-Le corps envoyé porte en plus `$ip` à `null` : ce n'est pas une donnée, c'est la consigne qui
-demande à PostHog de ne pas relever l'adresse IP de la requête ni d'en déduire une
-géolocalisation. Sans elle, l'IP publique du serveur serait enregistrée par le service.
+Le corps envoyé porte en plus `$ip` à `null`, une demande faite à PostHog de ne pas associer
+l'IP source au profil ni d'enregistrer la propriété IP et sa géolocalisation. Cela ne masque
+pas l'adresse IP source au service qui reçoit la connexion HTTP ; nous ne pouvons pas garantir
+à partir du code client seul son traitement côté infrastructure PostHog.
 
 Les cinq événements :
 
@@ -70,9 +76,9 @@ Les cinq événements :
 - **`session_heartbeat`** (toutes les 30 minutes) : la durée de fonctionnement du serveur et
   le nombre de morts brouillées depuis le démarrage.
 
-**Ce qui ne l'est jamais :** aucun pseudo, aucune adresse IP, aucun UUID de joueur, aucun
-contenu de message. Ce plugin existe pour empêcher un pseudo de fuiter — il ne va pas
-expédier ces mêmes pseudos ailleurs.
+**Ce que le plugin ne place pas dans les événements :** aucun pseudo, UUID de joueur ni contenu
+de message, et aucune propriété contenant directement l'adresse IP. L'IP source reste visible
+au destinataire de la requête HTTP ; voir aussi la demande `$ip: null` ci-dessus.
 
 ## Limitations connues
 
