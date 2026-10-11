@@ -30,10 +30,10 @@ No player ever sees the real username — operators included. The gameplay is th
 | `filler-character` | `a` | Base character. Minecraft swaps each character for a random glyph of the **same width**, so this setting fixes the width on screen. |
 | `obfuscate-weapon-name` | `true` | Also obfuscate custom weapon names, which can give the killer away. |
 | `log-real-names` | `true` | Write the real usernames of obfuscated players to the server log, for moderation. |
-| `telemetry` | `true` | Send anonymous usage statistics. `false` turns every send off. |
+| `telemetry` | `true` | Enable pseudonymous usage statistics. Set to `false` and fully restart the server to stop event sends. |
 | `telemetry-host` | `https://eu.i.posthog.com` | The PostHog instance the statistics are sent to. Change it to point at a self-hosted instance. |
 
-`/anonymouspotion reload` reloads the config in place — permission `anonymouspotion.admin`, operators by default.
+`/anonymouspotion reload` reloads gameplay settings in place — permission `anonymouspotion.admin`, operators by default. Changes to `telemetry` or `telemetry-host` require a full server stop and restart; `/reload` does not reconfigure the existing telemetry client.
 
 ## Known limitations
 
@@ -43,8 +43,11 @@ No player ever sees the real username — operators included. The gameplay is th
 
 ## Telemetry
 
-The plugin sends anonymous usage statistics to PostHog. Set `telemetry: false` in
-`config.yml` to turn it off.
+The plugin can send usage statistics to PostHog. Events use a persistent random installation UUID
+as their `distinct_id`, so they are pseudonymous, not absolutely anonymous. Set `telemetry: false`
+in `config.yml`, then fully stop and restart the server, to prevent event sends by the telemetry
+client. The disabled setting does not necessarily prevent the `.install-id` file from being read
+or created. `/anonymouspotion reload` alone does not change the client's state.
 
 **What is sent:** a random installation id generated on first start, four properties attached to
 every event, plus five events.
@@ -57,9 +60,10 @@ The four properties present on every event, whichever it is:
 - **`mc_version`**: the server's Minecraft version, for example `1.21.11`.
 - **`component_version`**: the plugin version, for example `1.0.0`.
 
-The body also carries `$ip` set to `null`. That is not data — it is the instruction telling
-PostHog not to record the request's IP address, nor derive a geolocation from it. Without it,
-the server's public IP would be stored by the service.
+The body also carries `$ip` set to `null`, a request for PostHog not to associate the source IP
+with the profile or record the IP property and its geolocation. This does not hide the source IP
+from the service receiving the HTTP connection; client code alone cannot guarantee how PostHog's
+infrastructure handles that network-level information.
 
 The five events:
 
@@ -75,9 +79,9 @@ The five events:
 - **`session_heartbeat`** (every 30 minutes): server uptime and how many deaths have been
   obfuscated since startup.
 
-**What is never sent:** no usernames, no IP addresses, no player UUIDs, no message contents.
-This plugin exists to stop a username from leaking — it is not going to ship those same
-usernames somewhere else.
+**What the plugin does not put in events:** no usernames, player UUIDs or message contents, and
+no property directly containing the IP address. The source IP remains visible to the HTTP
+request recipient; see the `$ip: null` request above.
 
 ## Requirements
 

@@ -16,10 +16,13 @@ obfuscate-weapon-name: true
 # Écrire dans les logs serveur le pseudo réel des joueurs brouillés, pour la modération.
 log-real-names: true
 
-# Télémétrie anonyme (PostHog) — passer à false pour la désactiver.
-# Aucune donnée personnelle n'est transmise : ni pseudo, ni adresse IP, ni UUID de joueur,
-# ni contenu de message. Le corps envoyé demande d'ailleurs explicitement à PostHog de ne pas
-# relever l'adresse IP de la requête ni d'en déduire une géolocalisation.
+# Télémétrie PostHog pseudonymisée — passer à false puis redémarrer complètement le serveur.
+# Les événements sont identifiés par un UUID d'installation persistant ; ce n'est pas un
+# anonymat absolu. Aucun pseudo, UUID de joueur ni contenu de message n'est placé dans les
+# événements. $ip: null demande à PostHog de ne pas associer l'IP source au profil, mais ne
+# masque pas l'IP source au service qui reçoit la connexion HTTP.
+# Le fichier .install-id peut tout de même être lu ou créé lorsque la télémétrie est désactivée.
+# /anonymouspotion reload ne reconfigure pas le client : un redémarrage est requis.
 # Quatre propriétés accompagnent chaque événement : `app` (le nom court du plugin, toujours
 # "anonymouspotion"), `source` (la plateforme, toujours "paper"), `mc_version` (la version de
 # Minecraft du serveur) et `component_version` (la version du plugin).
