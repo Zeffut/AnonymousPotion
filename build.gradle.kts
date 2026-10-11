@@ -10,7 +10,7 @@ val targetConfig = mapOf(
     "1.21.11" to ("1.21.11-R0.1-SNAPSHOT" to 21),
     "26.1.2" to ("26.1.2.build.74-stable" to 25),
     "26.2" to ("26.2.build.129-stable" to 25),
-    "26.3" to ("26.3.build.174-beta" to 25),
+    "26.3" to ("26.3.build.175-stable" to 25),
 )
 val (paperApiVersion, defaultJavaVersion) = targetConfig[paperTarget]
     ?: throw GradleException("Unsupported paperTarget '$paperTarget'; choose ${targetConfig.keys.joinToString()}")

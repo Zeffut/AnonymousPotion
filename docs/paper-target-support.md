@@ -7,9 +7,9 @@ AnonymousPotion is built against each Paper API target separately. The API depen
 | 1.21.11 | `1.21.11-R0.1-SNAPSHOT` | 21 | Existing supported target |
 | 26.1.2 (stable build 74) | `26.1.2.build.74-stable` | 25 | Build and tests passed locally |
 | 26.2 (stable build 129) | `26.2.build.129-stable` | 25 | Build and tests passed locally |
-| 26.3 (beta build 174) | `26.3.build.174-beta` | 25 | Preview target only; not stable Paper support |
+| 26.3 (stable build 175) | `26.3.build.175-stable` | 25 | Stable target; separate from the published beta |
 
-Paper 26.3 is a stable Minecraft release, but Paper build 174 is BETA (verified through the official Fill API and Maven metadata on 2026-10-11). The 26.3 target follows that channel: any publication must be labelled `beta`, not `release`. Stable Paper support requires a separately validated stable API and runtime build. Telemetry defaults and opt-out remain unchanged.
+Paper 26.3 build 175 is STABLE (verified through the official Fill API on 2026-10-11). The 26.3 target now pins its stable API and requires Java 25. Release publication requires build/tests, exact-commit CI, independent review and a smoke test on this stable runtime. The previously published `1.1.0+mc26.3-beta.1` remains a beta and must not be reclassified. Telemetry defaults and opt-out remain unchanged.
 
 Run a target locally with `./gradlew clean test build -PpaperTarget=26.2`. The toolchain defaults to 21 for 1.21.11 and 25 for 26.x. A toolchain can be overridden for diagnosis with `-PjavaVersion=25`; that does not validate execution compatibility with Java 21. CI runs 1.21.11 on Java 21 and each 26.x target on Java 25.
 
